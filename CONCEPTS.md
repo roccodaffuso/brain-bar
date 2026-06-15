@@ -24,8 +24,14 @@ BrainBar is a local-first macOS control center for a Markdown or Obsidian-style 
 - **Graph Check**: a read-only graph maintenance view inside the 2D runtime. It highlights graph-derived signals such as notes needing links, key notes, disconnected groups, and stale key notes when timestamps are available.
 - **System Status**: the native app panel that checks local setup state such as vault path, graph file, Graphify command, Git state, Review Queue, and Brain Check configuration.
 - **Agent Activity**: metadata-only local file and agent event observability. It shows what local tools or agents touched graph-relevant paths without storing note contents, prompts, transcripts, secrets, stdout/stderr, or build artifacts.
+- **Agent Activity source**: a local tool or agent that emits metadata-only `brainbar-trace` events. Codex and Claude are shipped activity sources; future integrations such as Hermes should start at this same level.
 - **Agent Workflows**: a planned grouping layer over Agent Activity events that explains what work is happening across multiple reads, writes, focus changes, closeouts, decisions, and pending graph refreshes. It is not an automation engine.
-- **Hermes Agent**: a future first-class workflow agent concept for graph-aware, memory-aware local work. Hermes should be treated as deeper than a generic event source: Codex and Claude emit activity; Hermes is intended to expose observable runs, source trails, proposed outputs, and workflow state.
+- **Workflow projection**: read-only interpretation of activity metadata as a unit of work with source trail, output trail, status, pending graph refresh, and next useful action.
+- **Runtime control**: starting, scheduling, or commanding an agent from BrainBar. This is not part of Agent Activity or the first Agent Workflows slice.
+- **Hermes Agent**: a future integration direction for graph-aware, memory-aware local work. Hermes is not a shipped BrainBar integration yet. It should first be treated as an Agent Activity source; it becomes workflow-native only if it exposes stable run metadata such as session id, workflow id, intent, status, source paths, and output paths.
+- **Hermes SOUL**: Hermes' global identity/persona layer, usually `SOUL.md` under `HERMES_HOME`. It is not project context, not vault memory, and not a BrainBar integration target.
+- **Hermes Memory**: Hermes' internal persistent memory/profile layer, including `MEMORY.md` and `USER.md`. BrainBar should not ingest, sync, display, or treat it as graph data.
+- **Hermes Vault Skill**: a future BrainBar-managed or documented Hermes skill that teaches Hermes how to read/write a local vault safely and emit metadata-only BrainBar trace events. It should live as a skill or project context instruction, not in `SOUL.md`.
 
 ## User-Facing Terms
 
@@ -72,7 +78,7 @@ BrainBar is a local-first macOS control center for a Markdown or Obsidian-style 
 - **Review Queue status payload**: JSON printed by a configured local status command. Required shape includes `pending_count`; `items` are optional.
 - **Review Queue graph targets**: optional item fields `source_file` and `node_id` used only to highlight matching graph nodes.
 - **Agent Activity event**: metadata-only JSONL record, currently versioned independently of Graphify output and vault content.
-- **Agent Workflow state**: future runtime grouping over recent Agent Activity events. Prefer explicit event ids such as `session_id` when present and conservative inferred grouping only when needed.
+- **Agent Workflow state**: future runtime grouping over recent Agent Activity events. Prefer explicit event ids such as `session_id`, `workflow_id`, and `workflow_title` when present and conservative inferred grouping only when needed.
 - **Brain KG**: a generic term for a generated or advisory knowledge graph produced by a user's local vault workflow. In BrainBar docs, avoid treating it as a required product subsystem unless code/config explicitly wires it through local commands.
 
 ## Do Not Confuse
@@ -94,7 +100,12 @@ BrainBar is a local-first macOS control center for a Markdown or Obsidian-style 
 - **3D Explorer is still local graph visualization, not AI interpretation.** Keep language conservative unless product docs and QA criteria change.
 - **Agent Activity is not Agent Workflows.** Activity is event-level observability; workflows are grouped units of work over those events.
 - **Agent Workflows are not an automation engine.** They should not imply BrainBar starts or controls agents unless a concrete local command/API explicitly does that.
-- **Hermes Agent is not just another integration badge.** Codex and Claude are current event-source integrations. Hermes is a future workflow-native agent direction and should not be documented as shipped until implementation exists.
+- **Agent Activity sources are not workflow actors by default.** Codex, Claude, and future Hermes tracing can all emit events without implying workflow state.
+- **Workflow projection is not runtime control.** Projected workflows are read-only graph overlays until a separate product decision adds explicit commands.
+- **Hermes Agent is not shipped.** Codex and Claude are current event-source integrations. Hermes is a future direction that should start as an activity source and become workflow-native only after concrete metadata exists.
+- **Hermes SOUL is not vault instructions.** Do not install BrainBar/Vault workflow rules into `SOUL.md`; use a Hermes skill or project context file instead.
+- **Hermes Memory is not BrainBar memory.** Do not imply BrainBar syncs, ingests, or writes Hermes `MEMORY.md`/`USER.md`; BrainBar should visualize only declared metadata paths and events.
+- **Hermes Vault Skill is not runtime control.** A skill can teach Hermes how to operate the vault, but BrainBar still does not start, schedule, or command Hermes runs.
 - **Brain KG is not a public dependency.** Treat it as optional local/generated context unless a concrete integration is present.
 
 ## Agent Rules
@@ -115,4 +126,5 @@ BrainBar is a local-first macOS control center for a Markdown or Obsidian-style 
 - Whether `Brain KG` should stay an external/local workflow term or become a documented BrainBar integration point.
 - Whether `Review Queue` should keep its generic name or split into more specific public workflows later.
 - Whether Agent Workflows should require explicit workflow/session ids or infer short sessions from recent metadata-only events.
-- Whether Hermes Agent should use the existing Agent Activity JSONL stream or a separate local run-state contract.
+- Whether BrainBar should install a Hermes Vault Skill, a project `.hermes.md`/`AGENTS.md` block, or both.
+- Whether future Hermes Agent workflow metadata should use the existing Agent Activity JSONL stream, optional `brainbar-trace` fields, a separate local run-state file, or a future local service API.

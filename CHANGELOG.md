@@ -4,7 +4,7 @@ All notable changes to BrainBar are documented here.
 
 ## Unreleased
 
-- Added Agent Workflows product documentation for the next layer beyond Agent Activity, including Hermes Agent positioning as a future workflow-native agent.
+- Added Agent Workflows product documentation for the next layer beyond Agent Activity, aligning Hermes Agent's documented `SOUL.md`, memory, skills, toolsets, terminal backends, gateways, scheduled tasks, and subagents with a phased, read-only strategy.
 
 ## 0.9.81 - 2026-06-16
 

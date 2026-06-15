@@ -94,7 +94,7 @@ The event contract is deliberately narrow:
 
 ![BrainBar Agent Activity sidebar detail](docs/brainbar-agent-activity-sidebar.png)
 
-See [Agent Workflows](docs/agent-workflows.md) for the product direction beyond event-level activity, including how Hermes Agent should fit as a future workflow-native agent rather than just another activity badge.
+See [Agent Workflows](docs/agent-workflows.md) for the product direction beyond event-level activity. Hermes Agent is documented there as a future integration direction: first as a metadata-only activity source like Codex and Claude, later as a workflow projection only when stable run/session metadata exists. The document also keeps Hermes `SOUL.md`, internal memory, vault skills, and BrainBar graph truth deliberately separate.
 
 ## 3D Explorer
 
