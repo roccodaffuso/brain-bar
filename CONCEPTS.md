@@ -23,6 +23,9 @@ BrainBar is a local-first macOS control center for a Markdown or Obsidian-style 
 - **Brain Check**: a configurable local command hook for the user's own vault validation script or CLI. BrainBar does not define what the check means.
 - **Graph Check**: a read-only graph maintenance view inside the 2D runtime. It highlights graph-derived signals such as notes needing links, key notes, disconnected groups, and stale key notes when timestamps are available.
 - **System Status**: the native app panel that checks local setup state such as vault path, graph file, Graphify command, Git state, Review Queue, and Brain Check configuration.
+- **Agent Activity**: metadata-only local file and agent event observability. It shows what local tools or agents touched graph-relevant paths without storing note contents, prompts, transcripts, secrets, stdout/stderr, or build artifacts.
+- **Agent Workflows**: a planned grouping layer over Agent Activity events that explains what work is happening across multiple reads, writes, focus changes, closeouts, decisions, and pending graph refreshes. It is not an automation engine.
+- **Hermes Agent**: a future first-class workflow agent concept for graph-aware, memory-aware local work. Hermes should be treated as deeper than a generic event source: Codex and Claude emit activity; Hermes is intended to expose observable runs, source trails, proposed outputs, and workflow state.
 
 ## User-Facing Terms
 
@@ -48,6 +51,8 @@ BrainBar is a local-first macOS control center for a Markdown or Obsidian-style 
 - **Recent Orbit**: a 3D runtime view for recently changed or date-named notes. It highlights recent notes and traces one active recent note to its nearest visible key note when a path exists.
 - **Graph Story**: a 3D runtime guided tour through deterministic graph signals such as recent notes, key notes, large communities, bridge notes, and needs-attention areas. It presents each step as a compact narrative card with a primary note and a short takeaway.
 - **Living Graph Polish**: 3D visual responsiveness such as signal-flow edge currents, coordinated community breathing, recent-note warmth, and action response pulses. It is polish over the current runtime state, not a separate graph mode.
+- **Agent Activity**: visible recent file or agent events mapped to graph nodes when possible. It is event-level observability.
+- **Agent Workflow**: a readable unit of agent work built from one or more Agent Activity events. It should summarize intent, touched files, source trail, pending refresh, status, and next useful action.
 
 ## Internal Architecture Terms
 
@@ -66,6 +71,8 @@ BrainBar is a local-first macOS control center for a Markdown or Obsidian-style 
 - **Edge provenance**: runtime classification for a connection as `Wikilink`, `Graphify`, or `Unknown`, based on Graphify metadata and exported wikilink data.
 - **Review Queue status payload**: JSON printed by a configured local status command. Required shape includes `pending_count`; `items` are optional.
 - **Review Queue graph targets**: optional item fields `source_file` and `node_id` used only to highlight matching graph nodes.
+- **Agent Activity event**: metadata-only JSONL record, currently versioned independently of Graphify output and vault content.
+- **Agent Workflow state**: future runtime grouping over recent Agent Activity events. Prefer explicit event ids such as `session_id` when present and conservative inferred grouping only when needed.
 - **Brain KG**: a generic term for a generated or advisory knowledge graph produced by a user's local vault workflow. In BrainBar docs, avoid treating it as a required product subsystem unless code/config explicitly wires it through local commands.
 
 ## Do Not Confuse
@@ -85,6 +92,9 @@ BrainBar is a local-first macOS control center for a Markdown or Obsidian-style 
 - **Search Reveal is not a graph filter.** It searches currently visible nodes, moves attention to one result, and leaves the graph context present.
 - **Living Graph Polish is not a new feature mode.** It should not add new UI, move nodes geometrically, or change graph data; it only makes the existing 3D graph feel more responsive.
 - **3D Explorer is still local graph visualization, not AI interpretation.** Keep language conservative unless product docs and QA criteria change.
+- **Agent Activity is not Agent Workflows.** Activity is event-level observability; workflows are grouped units of work over those events.
+- **Agent Workflows are not an automation engine.** They should not imply BrainBar starts or controls agents unless a concrete local command/API explicitly does that.
+- **Hermes Agent is not just another integration badge.** Codex and Claude are current event-source integrations. Hermes is a future workflow-native agent direction and should not be documented as shipped until implementation exists.
 - **Brain KG is not a public dependency.** Treat it as optional local/generated context unless a concrete integration is present.
 
 ## Agent Rules
@@ -104,3 +114,5 @@ BrainBar is a local-first macOS control center for a Markdown or Obsidian-style 
 - Whether `Graph Check` findings should stay read-only or eventually become guided workflows.
 - Whether `Brain KG` should stay an external/local workflow term or become a documented BrainBar integration point.
 - Whether `Review Queue` should keep its generic name or split into more specific public workflows later.
+- Whether Agent Workflows should require explicit workflow/session ids or infer short sessions from recent metadata-only events.
+- Whether Hermes Agent should use the existing Agent Activity JSONL stream or a separate local run-state contract.

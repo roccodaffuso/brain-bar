@@ -94,6 +94,8 @@ The event contract is deliberately narrow:
 
 ![BrainBar Agent Activity sidebar detail](docs/brainbar-agent-activity-sidebar.png)
 
+See [Agent Workflows](docs/agent-workflows.md) for the product direction beyond event-level activity, including how Hermes Agent should fit as a future workflow-native agent rather than just another activity badge.
+
 ## 3D Explorer
 
 The 3D Explorer is BrainBar's main surface. It keeps the graph spatially present while making one route, node, community, or recent change readable.

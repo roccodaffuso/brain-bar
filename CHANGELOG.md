@@ -4,6 +4,8 @@ All notable changes to BrainBar are documented here.
 
 ## Unreleased
 
+- Added Agent Workflows product documentation for the next layer beyond Agent Activity, including Hermes Agent positioning as a future workflow-native agent.
+
 ## 0.9.81 - 2026-06-16
 
 - Restored smooth 3D drag and zoom performance by disabling the invisible WebGL render pass while keeping the full canvas graph visible.
