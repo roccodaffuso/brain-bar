@@ -55,8 +55,30 @@ final class BrainBarTests: XCTestCase {
         XCTAssertTrue(status.vaultExists)
         XCTAssertTrue(status.dashboardExists)
         XCTAssertTrue(status.graphHtmlExists)
+        XCTAssertFalse(status.graphJSONExists)
+        XCTAssertTrue(status.graphOutputExists)
         XCTAssertTrue(status.graphReportExists)
         XCTAssertEqual(status.gitDirty, true)
+    }
+
+    func testVaultStatusRecognizesGraphifyJSONWithoutHTML() async throws {
+        let vault = try temporaryDirectory()
+        let graphDirectory = vault.appendingPathComponent("graphify-out")
+        try FileManager.default.createDirectory(at: graphDirectory, withIntermediateDirectories: true)
+        try #"{"nodes":[],"edges":[]}"#.write(
+            to: graphDirectory.appendingPathComponent("graph.json"),
+            atomically: true,
+            encoding: .utf8
+        )
+
+        var config = BrainBarConfig.default
+        config.vaultPath = vault.path
+        let status = await VaultStatusService().status(for: config)
+
+        XCTAssertFalse(status.graphHtmlExists)
+        XCTAssertTrue(status.graphJSONExists)
+        XCTAssertTrue(status.graphOutputExists)
+        XCTAssertNotNil(status.graphOutputModifiedAt)
     }
 
     func testVaultGitDescriptionNamesVaultAndAvoidsDirtyLabel() {
@@ -66,6 +88,8 @@ final class BrainBarTests: XCTestCase {
             dashboardExists: false,
             graphHtmlExists: false,
             graphHtmlModifiedAt: nil,
+            graphJSONExists: false,
+            graphJSONModifiedAt: nil,
             graphReportExists: false,
             gitBranch: "main",
             gitDirty: true
@@ -411,6 +435,33 @@ final class BrainBarTests: XCTestCase {
 
         let saved = try manager.load()
         XCTAssertEqual(saved.vaultPath, "/tmp/example-vault")
+    }
+
+    @MainActor
+    func testAppModelDoesNotReloadUnchangedGraphDuringStatusRefresh() async throws {
+        let directory = try temporaryDirectory()
+        let configURL = directory.appendingPathComponent("config.json")
+        let vault = try temporaryDirectory()
+        let graphDirectory = vault.appendingPathComponent("graphify-out")
+        try FileManager.default.createDirectory(at: graphDirectory, withIntermediateDirectories: true)
+        try #"{"nodes":[],"edges":[]}"#.write(
+            to: graphDirectory.appendingPathComponent("graph.json"),
+            atomically: true,
+            encoding: .utf8
+        )
+        var manager = ConfigurationManager()
+        manager.environment = ["BRAIN_BAR_CONFIG": configURL.path]
+        var config = BrainBarConfig.default
+        config.vaultPath = vault.path
+        try manager.save(config)
+        let model = AppModel(configurationManager: manager)
+
+        await model.refreshStatus()
+        let firstReloadToken = model.graphReloadToken
+        await model.refreshStatus()
+
+        XCTAssertTrue(model.status.graphJSONExists)
+        XCTAssertEqual(model.graphReloadToken, firstReloadToken)
     }
 
     @MainActor

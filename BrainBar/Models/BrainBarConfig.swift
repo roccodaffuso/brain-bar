@@ -254,6 +254,8 @@ struct VaultStatus: Equatable, Sendable {
     var dashboardExists: Bool
     var graphHtmlExists: Bool
     var graphHtmlModifiedAt: Date?
+    var graphJSONExists: Bool
+    var graphJSONModifiedAt: Date?
     var graphReportExists: Bool
     var gitBranch: String?
     var gitDirty: Bool?
@@ -264,10 +266,22 @@ struct VaultStatus: Equatable, Sendable {
         dashboardExists: false,
         graphHtmlExists: false,
         graphHtmlModifiedAt: nil,
+        graphJSONExists: false,
+        graphJSONModifiedAt: nil,
         graphReportExists: false,
         gitBranch: nil,
         gitDirty: nil
     )
+
+    var graphOutputExists: Bool {
+        graphJSONExists || graphHtmlExists
+    }
+
+    var graphOutputModifiedAt: Date? {
+        [graphJSONModifiedAt, graphHtmlModifiedAt]
+            .compactMap { $0 }
+            .max()
+    }
 
     var gitDescription: String {
         guard let gitDirty else {

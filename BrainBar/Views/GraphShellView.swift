@@ -90,10 +90,10 @@ struct GraphShellView: View {
             ) {
                 openSettings()
             }
-        } else if !model.status.graphHtmlExists {
+        } else if !model.status.graphOutputExists {
             EmptyGraphStateView(
                 title: "Graphify output not found",
-                detail: "BrainBar is connected to the vault. Generate graphify-out/graph.html to see the graph here.",
+                detail: "BrainBar is connected to the vault. Generate graphify-out/graph.json to see the graph here.",
                 systemImage: "point.3.connected.trianglepath.dotted",
                 buttonTitle: model.isRefreshingGraph ? "Refreshing..." : "Refresh Graph",
                 buttonSystemImage: "arrow.triangle.2.circlepath",
@@ -102,6 +102,17 @@ struct GraphShellView: View {
                 Task {
                     await model.refreshGraph()
                 }
+            }
+        } else if model.status.graphJSONExists, !model.status.graphHtmlExists, !mode.isFocus {
+            EmptyGraphStateView(
+                title: "Graphify graph ready",
+                detail: "BrainBar found graphify-out/graph.json. Open the 3D Focus Window to explore it.",
+                systemImage: "point.3.connected.trianglepath.dotted",
+                buttonTitle: "Open 3D Graph",
+                buttonSystemImage: "macwindow",
+                steps: ["Vault connected", "Graph JSON found", "Open 3D graph"]
+            ) {
+                openFocusWindow()
             }
         } else if let graphURL = model.graphFileURL, let readAccessURL = model.graphReadAccessURL {
             if mode.isFocus {
@@ -135,7 +146,10 @@ struct GraphShellView: View {
 
     @ViewBuilder
     private func activeGraphView(graphURL: URL, readAccessURL: URL) -> some View {
-        if mode.isFocus, model.graphViewMode == .threeD && usesExperimental3DRenderer {
+        if mode.isFocus,
+           model.status.graphJSONExists,
+           (model.graphViewMode == .threeD || !model.status.graphHtmlExists),
+           usesExperimental3DRenderer {
             Graph3DWebView(
                 readAccessURL: readAccessURL,
                 reloadToken: model.graphReloadToken,
@@ -286,14 +300,15 @@ private struct GraphChromeBar: View {
             }
             .layoutPriority(1)
 
-            if mode.isFocus, model.status.graphHtmlExists {
+            if mode.isFocus, model.status.graphJSONExists, model.status.graphHtmlExists {
                 GraphModeSwitcher(
                     selectedMode: model.graphViewMode,
                     onSelect: model.setGraphViewMode
                 )
             }
 
-            if model.status.graphHtmlExists, model.graphViewMode == .threeD {
+            if (mode.isFocus && model.status.graphJSONExists && model.graphViewMode == .threeD)
+                || (!mode.isFocus && model.status.graphHtmlExists) {
                 GraphSourceLensMenu(
                     selectedLens: model.graphSourceLens,
                     onSelect: model.setGraphSourceLens
@@ -302,7 +317,7 @@ private struct GraphChromeBar: View {
 
             Spacer(minLength: 10)
 
-            if mode.isFocus, model.status.graphHtmlExists {
+            if mode.isFocus, model.status.graphOutputExists {
                 GraphViewportControls(
                     showsTopView: shows3DControls,
                     onZoomOut: model.zoomGraphOut,
@@ -377,10 +392,12 @@ private struct GraphActionMenu: View {
                     Label("Graph Health", systemImage: "stethoscope")
                 }
 
-                Button {
-                    model.openGraph()
-                } label: {
-                    Label("Open Externally", systemImage: "safari")
+                if model.status.graphHtmlExists {
+                    Button {
+                        model.openGraph()
+                    } label: {
+                        Label("Open Externally", systemImage: "safari")
+                    }
                 }
             }
 
@@ -762,7 +779,7 @@ private struct SystemStatusMenu: View {
                     }
                 }
 
-                if model.status.vaultExists && !model.status.graphHtmlExists {
+                if model.status.vaultExists && !model.status.graphOutputExists {
                     Button {
                         Task {
                             await model.refreshGraph()
@@ -798,11 +815,11 @@ private struct SystemStatusMenu: View {
     }
 
     private var graphStatusText: String {
-        model.status.graphHtmlExists ? "Graph file: ready" : "Graph file: missing"
+        model.status.graphOutputExists ? "Graph output: ready" : "Graph output: missing"
     }
 
     private var graphStatusIcon: String {
-        model.status.graphHtmlExists ? "checkmark.circle" : "exclamationmark.circle"
+        model.status.graphOutputExists ? "checkmark.circle" : "exclamationmark.circle"
     }
 
     private var graphifyCommandText: String {

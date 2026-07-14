@@ -83,6 +83,7 @@ final class AgentActivityService {
     private var eventLogStamp: AgentActivityFileStamp?
     private var eventLogWatcherTask: Task<Void, Never>?
     private var fileActivityWatcherTask: Task<Void, Never>?
+    private var graphIndexLoadTask: Task<Void, Never>?
     private var knownFileState: [String: Date] = [:]
     private var config: AgentActivityConfiguration = .default
 
@@ -93,6 +94,7 @@ final class AgentActivityService {
     deinit {
         eventLogWatcherTask?.cancel()
         fileActivityWatcherTask?.cancel()
+        graphIndexLoadTask?.cancel()
     }
 
     func start(
@@ -106,11 +108,8 @@ final class AgentActivityService {
         self.snapshotHandler = snapshotHandler
         lastPublishedSnapshot = nil
         eventLogStamp = nil
-        if let graphReadAccessURL {
-            graphIndex = AgentActivityGraphIndex.load(readAccessURL: graphReadAccessURL)
-        } else {
-            graphIndex = .empty
-        }
+        graphIndex = .empty
+        refreshGraphIndex(graphReadAccessURL: graphReadAccessURL)
         readEventLog(force: true)
         startEventLogWatcherIfNeeded()
         if config.fileActivityEnabled, let vaultURL {
@@ -124,16 +123,30 @@ final class AgentActivityService {
         eventLogWatcherTask = nil
         fileActivityWatcherTask?.cancel()
         fileActivityWatcherTask = nil
+        graphIndexLoadTask?.cancel()
+        graphIndexLoadTask = nil
         knownFileState = [:]
     }
 
     func refreshGraphIndex(graphReadAccessURL: URL?) {
-        if let graphReadAccessURL {
-            graphIndex = AgentActivityGraphIndex.load(readAccessURL: graphReadAccessURL)
-        } else {
+        graphIndexLoadTask?.cancel()
+        graphIndexLoadTask = nil
+        guard let graphReadAccessURL else {
             graphIndex = .empty
+            publishSnapshot()
+            return
         }
-        publishSnapshot()
+
+        graphIndexLoadTask = Task { [weak self] in
+            let index = await Task.detached(priority: .utility) {
+                AgentActivityGraphIndex.load(readAccessURL: graphReadAccessURL)
+            }.value
+            guard !Task.isCancelled else {
+                return
+            }
+            self?.graphIndex = index
+            self?.publishSnapshot()
+        }
     }
 
     func writeTestEvent() throws {
@@ -449,7 +462,7 @@ enum AgentActivityTraceWriter {
     }
 }
 
-struct AgentActivityGraphIndex {
+struct AgentActivityGraphIndex: Sendable {
     var byNodeId: [String: AgentActivityGraphNode]
     var bySourceFile: [String: AgentActivityGraphNode]
     var byFilename: [String: AgentActivityGraphNode]

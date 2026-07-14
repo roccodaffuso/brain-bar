@@ -139,10 +139,10 @@ final class AppModel {
         if let lastGraphRefresh {
             return lastGraphRefresh.summary
         }
-        if let modifiedAt = status.graphHtmlModifiedAt {
+        if let modifiedAt = status.graphOutputModifiedAt {
             return "Graph updated \(modifiedAt.formattedRelative)"
         }
-        return status.graphHtmlExists ? "Graph ready" : "Graphify not run"
+        return status.graphOutputExists ? "Graph ready" : "Graphify not run"
     }
 
     init(
@@ -175,9 +175,13 @@ final class AppModel {
     }
 
     func refreshStatus() async {
-        status = await vaultStatusService.status(for: config)
-        agentActivityService.refreshGraphIndex(graphReadAccessURL: graphReadAccessURL)
-        graphReloadToken += 1
+        let previousGraphVersion = status.graphOutputModifiedAt
+        let nextStatus = await vaultStatusService.status(for: config)
+        status = nextStatus
+        if nextStatus.graphOutputModifiedAt != previousGraphVersion {
+            agentActivityService.refreshGraphIndex(graphReadAccessURL: graphReadAccessURL)
+            graphReloadToken += 1
+        }
         errorMessage = nil
     }
 

@@ -8,11 +8,14 @@ struct VaultStatusService: Sendable {
         }
 
         let vaultExists = directoryExists(vaultURL)
-        let branch = vaultExists ? await runGit(["branch", "--show-current"], in: vaultURL) : nil
-        let dirtyOutput = vaultExists ? await runGit(["status", "--porcelain"], in: vaultURL) : nil
+        async let branchTask = vaultExists ? runGit(["branch", "--show-current"], in: vaultURL) : nil
+        async let dirtyOutputTask = vaultExists ? runGit(["status", "--porcelain"], in: vaultURL) : nil
+        let (branch, dirtyOutput) = await (branchTask, dirtyOutputTask)
         let isGitRepo = branch != nil || dirtyOutput != nil
         let graphURL = resolvedURL(config.graphHtmlRelativePath, in: vaultURL)
         let graphExists = FileManager.default.fileExists(atPath: graphURL.path)
+        let graphJSONURL = graphURL.deletingLastPathComponent().appendingPathComponent("graph.json")
+        let graphJSONExists = FileManager.default.fileExists(atPath: graphJSONURL.path)
 
         return VaultStatus(
             vaultPath: vaultURL.path,
@@ -20,6 +23,8 @@ struct VaultStatusService: Sendable {
             dashboardExists: FileManager.default.fileExists(atPath: resolvedURL(config.projectDashboardRelativePath, in: vaultURL).path),
             graphHtmlExists: graphExists,
             graphHtmlModifiedAt: graphExists ? modificationDate(for: graphURL) : nil,
+            graphJSONExists: graphJSONExists,
+            graphJSONModifiedAt: graphJSONExists ? modificationDate(for: graphJSONURL) : nil,
             graphReportExists: FileManager.default.fileExists(atPath: resolvedURL(config.graphReportRelativePath, in: vaultURL).path),
             gitBranch: branch?.trimmingCharacters(in: .whitespacesAndNewlines),
             gitDirty: isGitRepo ? !(dirtyOutput?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true) : nil
