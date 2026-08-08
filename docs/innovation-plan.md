@@ -389,6 +389,10 @@ The rules engine uses iterative articulation analysis and precomputed component 
 
 These ideas should remain behind explicit decision gates until the earlier milestones prove daily value.
 
+### 3D Visual and Spatial Redesign
+
+Evolve the mature 3D renderer from a dense uniform cloud into a deterministic community-island system with progressive painted detail, stronger node/edge hierarchy, bounded labels, intentional camera presets, and a collapsible context panel. The complete implementation contract, performance boundary, test matrix, and phased rollout are defined in [`graph3d-visual-spatial-redesign.md`](graph3d-visual-spatial-redesign.md). This work is explicitly post-0.10 and must preserve the completed M0–M5 identity, loading, privacy, read-only, and performance contracts.
+
 ### Temporal Replay
 
 Combine Change Radar and Agent Workflows to replay how a body of work transformed the graph. This depends on stable snapshot identity and trustworthy workflow grouping.
