@@ -517,11 +517,12 @@ final class AgentActivityService {
     }
 
     private func estimatedHistoryBytes(for record: AgentActivityHistoryRecord) -> Int {
-        1_024 + 6 * (record.id.utf8.count + record.agent.utf8.count + record.relativePath.utf8.count
-            + (record.sessionId?.utf8.count ?? 0) + (record.project?.utf8.count ?? 0)
+        let requiredBytes = record.id.utf8.count + record.agent.utf8.count + record.relativePath.utf8.count
+        let contextualBytes = (record.sessionId?.utf8.count ?? 0) + (record.project?.utf8.count ?? 0)
             + (record.source?.utf8.count ?? 0) + (record.reason?.utf8.count ?? 0)
-            + (record.nodeId?.utf8.count ?? 0) + (record.status?.utf8.count ?? 0))
-            + (record.workflowId?.utf8.count ?? 0) + (record.workflowTitle?.utf8.count ?? 0)
+            + (record.nodeId?.utf8.count ?? 0) + (record.status?.utf8.count ?? 0)
+        let workflowBytes = (record.workflowId?.utf8.count ?? 0) + (record.workflowTitle?.utf8.count ?? 0)
+        return 1_024 + 6 * (requiredBytes + contextualBytes) + workflowBytes
     }
 
     private func publishSnapshot() {
