@@ -1,0 +1,74 @@
+{
+  "schemaVersion": 1,
+  "implementation": "synchronous-main-runtime-layout",
+  "generatedAt": "2026-08-07",
+  "environment": {
+    "operatingSystemVersion": "Version 26.5.2 (Build 25F84)",
+    "physicalMemoryBytes": 17179869184
+  },
+  "protocol": {
+    "coldRuns": 1,
+    "warmupRuns": 2,
+    "measuredRuns": 9
+  },
+  "fixtures": {
+    "inspected-shape": {
+      "nodeCount": 12547,
+      "edgeCount": 29868,
+      "parity": true,
+      "threeDLayoutCallReturnMs": {
+        "samples": [1517, 1519, 1523, 1511, 1526, 1520, 1569, 1529, 1527],
+        "p50": 1523,
+        "p95": 1553,
+        "cvPercent": 1.036423017700997
+      },
+      "threeDLayoutZeroDelayTimerProbeMs": {
+        "samples": [1531, 1533, 1537, 1526, 1540, 1535, 1583.0000000000002, 1544, 1541],
+        "p50": 1537,
+        "p95": 1567.4,
+        "cvPercent": 1.0179366847253029
+      },
+      "threeDLayoutPreparationMs": {
+        "samples": [1443, 1445, 1449, 1438, 1452, 1446, 1495, 1453, 1454],
+        "p50": 1449,
+        "p95": 1478.6,
+        "cvPercent": 1.0809673265960844
+      },
+      "threeDLoadToSettledPaintMs": {
+        "samples": [1667.2379970550537, 1671.7300415039062, 1675.6939888000488, 1664.113998413086, 1680.6329488754272, 1674.0189790725708, 1721.405029296875, 1686.905026435852, 1691.6780471801758],
+        "p50": 1675.6939888000488,
+        "p95": 1709.5142364501953,
+        "cvPercent": 0.9745460341361888
+      }
+    },
+    "25k-stress": {
+      "nodeCount": 25000,
+      "edgeCount": 59512,
+      "parity": true,
+      "threeDLayoutCallReturnMs": {
+        "samples": [6202, 5654, 5883.000000000001, 5326, 5405, 5360, 5377, 5415, 5084],
+        "p50": 5405,
+        "p95": 6074.400000000001,
+        "cvPercent": 5.766355559915028
+      },
+      "threeDLayoutZeroDelayTimerProbeMs": {
+        "samples": [6210, 5663, 5889, 5333, 5499, 5368, 5503, 5481, 5090],
+        "p50": 5499,
+        "p95": 6081.599999999999,
+        "cvPercent": 5.572606770540947
+      },
+      "threeDLayoutPreparationMs": {
+        "samples": [5981, 5441, 5677, 5137, 5135, 5171, 5182, 5208, 4904],
+        "p50": 5182,
+        "p95": 5859.4,
+        "cvPercent": 5.860865775390787
+      },
+      "threeDLoadToSettledPaintMs": {
+        "samples": [6446.752071380615, 5885.601043701172, 6128.306984901428, 5562.495946884155, 5674.896955490112, 5594.043016433716, 5701.048016548157, 5715.870976448059, 5283.933997154236],
+        "p50": 5701.048016548157,
+        "p95": 6319.37403678894,
+        "cvPercent": 5.553344493891505
+      }
+    }
+  }
+}

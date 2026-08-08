@@ -165,14 +165,58 @@ struct ReviewQueueConfiguration: Codable, Equatable, Sendable {
 struct AgentActivityConfiguration: Codable, Equatable, Sendable {
     var eventTracingEnabled: Bool
     var fileActivityEnabled: Bool
+    var fileActivityExclusions: [String]
+    var retentionDays: Int
 
     static let `default` = AgentActivityConfiguration(
         eventTracingEnabled: false,
-        fileActivityEnabled: true
+        fileActivityEnabled: true,
+        fileActivityExclusions: [],
+        retentionDays: 7
     )
 
+    enum CodingKeys: String, CodingKey {
+        case eventTracingEnabled
+        case fileActivityEnabled
+        case fileActivityExclusions
+        case retentionDays
+    }
+
+    init(
+        eventTracingEnabled: Bool,
+        fileActivityEnabled: Bool,
+        fileActivityExclusions: [String] = [],
+        retentionDays: Int = 7
+    ) {
+        self.eventTracingEnabled = eventTracingEnabled
+        self.fileActivityEnabled = fileActivityEnabled
+        self.fileActivityExclusions = fileActivityExclusions
+        self.retentionDays = retentionDays
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        eventTracingEnabled = try container.decodeIfPresent(Bool.self, forKey: .eventTracingEnabled) ?? false
+        fileActivityEnabled = try container.decodeIfPresent(Bool.self, forKey: .fileActivityEnabled) ?? true
+        fileActivityExclusions = try container.decodeIfPresent([String].self, forKey: .fileActivityExclusions) ?? []
+        retentionDays = try container.decodeIfPresent(Int.self, forKey: .retentionDays) ?? 7
+    }
+
     var normalized: AgentActivityConfiguration {
-        self
+        var configuration = self
+        configuration.fileActivityExclusions = Array(
+            Set(fileActivityExclusions.compactMap(Self.normalizedExclusion))
+        ).sorted()
+        configuration.retentionDays = min(max(retentionDays, 1), 90)
+        return configuration
+    }
+
+    private static func normalizedExclusion(_ value: String) -> String? {
+        let normalized = value
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .replacingOccurrences(of: "\\\\", with: "/")
+            .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        return normalized.isEmpty ? nil : normalized
     }
 }
 

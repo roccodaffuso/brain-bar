@@ -165,6 +165,8 @@ struct AgentActivityClaudeInstaller {
 
         Supported actions are `read`, `write`, `create`, `delete`, `focus`, `open`, `graph_refresh`, `closeout`, and `decision`.
 
+        Schema v2 optionally accepts `--workflow-id`, `--workflow-title`, and `--path-role source|output`. Use only declared values; omit `--path-role` for a touched path.
+
         Trace metadata only. Never trace note contents, prompts, raw transcripts, stdout/stderr, secrets, credentials, build artifacts, dependency caches, temporary files, or files under `.git`.
         \(Self.claudeEndMarker)
 

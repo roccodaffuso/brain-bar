@@ -235,6 +235,57 @@ html.brainbar-graph-ready #sidebar {
   background: rgba(127, 160, 255, 0.22);
 }
 
+.brainbar-evidence-inspector,
+.brainbar-evidence-health {
+  margin-top: 12px;
+  padding: 11px;
+  border: 1px solid var(--bb-border);
+  border-radius: 10px;
+  background: rgba(12, 15, 25, 0.7);
+}
+
+.brainbar-evidence-inspector h3,
+.brainbar-evidence-health h3,
+.brainbar-evidence-links h4 {
+  margin: 0 0 8px;
+  font-size: 12px;
+}
+
+.brainbar-evidence-rows p,
+.brainbar-evidence-links p,
+.brainbar-evidence-health > p,
+.brainbar-evidence-proposal p {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 5px 0;
+  font-size: 11px;
+}
+
+.brainbar-evidence-rows span {
+  overflow: hidden;
+  text-align: right;
+  text-overflow: ellipsis;
+}
+
+.brainbar-evidence-links,
+.brainbar-evidence-proposal {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--bb-border-subtle);
+}
+
+.brainbar-evidence-proposal pre {
+  overflow: auto;
+  margin: 7px 0;
+  padding: 8px;
+  border-radius: 7px;
+  background: rgba(0, 0, 0, 0.22);
+  color: var(--bb-text-secondary);
+  font: 11px ui-monospace, SFMono-Regular, Menlo, monospace;
+  white-space: pre-wrap;
+}
+
 #brainbar-focus-controls,
 .edge-actions {
   display: flex;

@@ -27,13 +27,14 @@ graphify-out/
 
 It does not vendor Graphify, upload vault content, rewrite generated Graphify files, or write to the vault from graph exploration features. The 3D and 2D graph modes are runtime-only views over local data.
 
-## What Is In v0.9.81
+## What Is In v0.10.0
 
-- **3D Explorer by default.** Search Reveal, Focus Orbit, Shortest Path, Explain Path, Path Compare, Community Spotlight, Recent Orbit, Graph Story, and Living Graph polish.
-- **Agent Activity.** Local file activity plus metadata-only `brainbar-trace` events, with one-click Codex and Claude integrations.
-- **3D performance recovery.** Smooth drag and zoom on dense graphs by removing invisible render work and keeping only low-cost static/reactive living signals.
-- **2D Workbench.** Operational graph inspection for recent notes, key notes, needs-links notes, groups, edge provenance, Graph Check, and bridge actions into 3D.
-- **Premium macOS surface.** Flatter app chrome, quieter sidebars, updated BrainBar mark, and a more native Settings layout.
+- **Large-graph foundation.** Off-main validation and transport, a dedicated layout Worker, deterministic layout caching, explicit loading/cancel/retry states, and exact graph identity gates.
+- **2D Workbench offline.** Graphify `graph.html` now uses BrainBar's pinned local Vis Network 9.1.6 runtime; the matching remote dependency is blocked. JSON-only vaults continue to use the bundled 3D Focus renderer.
+- **Orientation and continuity.** Setup Doctor, complete-graph filtered search, saved local views, and versioned 2D/3D session handoff.
+- **Change Radar.** Local rolling snapshots and a deterministic Change Inbox explain what changed after a successful refresh.
+- **Agent Activity and Workflows.** Event-driven watching, incremental metadata-only history, privacy controls, explicit-ID workflow trails, and pending-refresh paths.
+- **Guided Maintenance.** Unified evidence inspectors and copy-only Graph Check proposals for deterministic, reviewable maintenance without Markdown mutation.
 - **Notarized releases.** Public GitHub Releases ship as Developer ID signed, Apple-notarized `BrainBar.dmg` files.
 
 See [CHANGELOG.md](CHANGELOG.md) for the full release history.
@@ -81,7 +82,7 @@ BRAIN_BAR_FORCE=1 curl -fsSL https://raw.githubusercontent.com/Nova1390/brain-ba
 
 Agent Activity shows what local tools and agents are touching in your graph. BrainBar watches recent local file activity and can also read metadata-only JSONL events from the bundled `brainbar-trace` helper.
 
-The v0.9.81 integration includes one-click installers for Codex and Claude. When enabled, supported agents can emit events such as `read`, `write`, `create`, `delete`, `focus`, `closeout`, and `decision`. BrainBar maps those paths back to graph nodes when possible and shows pending paths when the graph has not been refreshed yet.
+The v0.10.0 integration includes one-click installers for Codex and Claude. When enabled, supported agents can emit events such as `read`, `write`, `create`, `delete`, `focus`, `closeout`, and `decision`. BrainBar maps those paths back to graph nodes when possible and shows pending paths when the graph has not been refreshed yet.
 
 ![BrainBar Agent Activity](docs/brainbar-agent-activity.png)
 
@@ -116,6 +117,8 @@ The 3D Explorer is BrainBar's main surface. It keeps the graph spatially present
 ## 2D Workbench
 
 2D is the operational workbench for inspection and graph hygiene. It embeds the generated Graphify/vis-network graph and adds BrainBar runtime controls without rewriting `graphify-out/graph.html`.
+
+BrainBar bundles the pinned Vis Network 9.1.6 browser runtime, blocks Graphify's matching `unpkg.com` script request, and supplies the local copy before Graphify initializes the graph. This makes the 2D Workbench independent of network availability, but it still requires Graphify to generate `graphify-out/graph.html`. A vault with only `graph.json` opens through the bundled 3D Focus renderer.
 
 Use it for:
 
@@ -234,6 +237,7 @@ BRAIN_BAR_REMOVE_CONFIG=1 curl -fsSL https://raw.githubusercontent.com/Nova1390/
 ## Troubleshooting
 
 - **The graph is empty.** Check that `vaultPath` points at the intended vault and that `graphify-out/graph.json` exists there.
+- **The menu-bar view asks to open 3D.** The 2D Workbench requires `graphify-out/graph.html`; regenerate the HTML with a node limit above your graph size, then refresh BrainBar. JSON-only output remains available in the 3D Focus window.
 - **Refresh Graph fails.** Make sure `graphify` is available on `PATH`, or update the configured refresh command.
 - **Search finds nothing.** Search Reveal only searches nodes visible under the current Source Lens and community filters.
 - **No path found.** The selected nodes may be disconnected in the visible graph, or the active Source Lens/community filters may hide the route.

@@ -23,6 +23,15 @@ import {
 import { nearestKeyNotePath, recentOrbitCandidates } from './graph3d-recent-utils.mjs';
 import { searchGraphNodes } from './graph3d-search-utils.mjs';
 import { buildGraphStorySteps, graphStoryPresentation } from './graph3d-story-utils.mjs';
+import {
+  clearLayoutCacheForTesting,
+  isLayoutCacheDigest,
+  layoutCacheKey,
+  normalizeLayoutCacheLens,
+  overwriteLayoutCacheForTesting,
+  readLayoutCache,
+  writeLayoutCache
+} from './graph3d-layout-cache.mjs';
 
 const stage = document.getElementById('stage');
 const graphVisual = document.getElementById('graph-visual');
@@ -98,11 +107,25 @@ const selectedNeighborVisualLimit = 48;
 const selectedEdgeVisualLimit = 96;
 const collapsedCommunityLimit = 8;
 const expandedCommunityLimit = 32;
+const layoutWorkerTestMode = (() => {
+  const parameters = new URLSearchParams(window.location.search);
+  if (parameters.get('layout-worker-test') !== '1') {
+    return '';
+  }
+  const mode = parameters.get('layout-worker-mode');
+  return mode === 'failStartup' || mode === 'holdResult' ? mode : '';
+})();
+const graphIdentityTestMode = new URLSearchParams(window.location.search).get('identity-test') === '1';
+const layoutCacheTestMode = new URLSearchParams(window.location.search).get('layout-cache-test');
+const layoutCacheTestEnabled = layoutCacheTestMode === 'enable' || layoutCacheTestMode === 'corrupt' || layoutCacheTestMode === 'hold';
 
 const pointTexture = createPointTexture();
 
 const state = {
   graph: null,
+  evidenceInput: null,
+  evidenceReport: null,
+  evidenceNow: null,
   lens: 'all',
   communities: [],
   communityByName: new Map(),
@@ -119,6 +142,7 @@ const state = {
   projectedPoints: new Map(),
   visualCacheDirty: true,
   selectedNode: null,
+  inspectedEdge: null,
   hoveredNode: null,
   hoveredEdge: null,
   hoverVisualNode: null,
@@ -160,6 +184,7 @@ const state = {
   searchRevealNodeId: null,
   searchRevealNeighborIds: new Set(),
   searchRevealEdgeIds: new Set(),
+  searchRevealRestore: null,
   pathMode: false,
   pathSourceId: null,
   pathTargetId: null,
@@ -178,10 +203,16 @@ const state = {
   agentActivityLastEventAt: null,
   agentActivityTracingEnabled: false,
   agentActivityEventLogPath: '',
+  agentActivityWorkflows: [],
+  workflowSelectionID: '',
+  workflowHighlight: { workflowID: '', nodeIds: [], pendingPaths: [] },
   lastDiagnostic: '',
   cameraPreset: 'Fit',
   lastFrameStatus: 'Waiting',
   visibleProjectedNodeCount: 0,
+  paintedNodeCount: 0,
+  paintedEdgeCount: 0,
+  paintedCountsSettled: false,
   visibleGraphRevision: 0,
   visualRevision: 0,
   projectedPointGrid: null,
@@ -198,6 +229,10 @@ const state = {
   overlayQuality: 'high',
   performanceStats: {
     staticRebuildMs: 0,
+    layoutPreparationMs: 0,
+    layoutWorkerComputeMs: 0,
+    layoutCommitMs: 0,
+    layoutCache: 'disabled',
     overlayFrameMs: 0,
     visualPixelRatio: 1,
     staticHubGlowCount: 0,
@@ -212,8 +247,19 @@ const state = {
   pointer: new THREE.Vector2(),
   raycaster: new THREE.Raycaster(),
   nodeIndexById: new Map(),
+  pendingNodeRevealId: '',
   pendingPointerEvent: null,
   pointerHitFrame: null,
+  graphLoadController: null,
+  graphLoadEpoch: 0,
+  graphGeneration: 0,
+  pendingGraphGeneration: null,
+  layoutEpoch: 0,
+  activeLayoutRequest: null,
+  heldLayoutResult: null,
+  heldLayoutCacheLookup: null,
+  layoutState: 'idle',
+  committedLayoutContext: null,
   animationFrame: null,
   ambientFrame: null,
   ambientPhase: 0,
@@ -235,6 +281,10 @@ installWindowAPI();
 
 if (window.__brainBarGraphJSON) {
   window.brainBarLoadGraph(window.__brainBarGraphJSON, window.__brainBarPendingGraphLens || 'all');
+} else if (window.__brainBarPendingGraphRequest) {
+  const request = window.__brainBarPendingGraphRequest;
+  window.__brainBarPendingGraphRequest = null;
+  void window.brainBarLoadGraphFromURL(request.graphURL, request.metadataURL, request.lens, request.generation);
 } else if (!isBrainBarWebKitScheme()) {
   fetch('./graph.json')
     .then((response) => {
@@ -289,6 +339,7 @@ function initScene() {
     state.cameraPreset = state.cameraPreset === 'Fit' ? 'Manual' : state.cameraPreset;
     markVisualCacheDirty();
     requestRender();
+    scheduleGraphSessionState();
   });
 
   selectedMarker = new THREE.Mesh(
@@ -326,19 +377,83 @@ function normalizeGraph(payload) {
   });
 
   const nodeIds = new Set(nodes.map((node) => node.id));
-  const edges = rawEdges.map((edge, index) => {
+  const explicitEdgeIDs = new Set(rawEdges
+    .map((edge) => edge?.id == null ? '' : String(edge.id))
+    .filter(Boolean));
+  const usedEdgeIDs = new Set(explicitEdgeIDs);
+  const idlessOrdinals = new Map();
+  const edges = rawEdges.map((edge) => {
     const source = endpointId(edge.source ?? edge.from);
     const target = endpointId(edge.target ?? edge.to);
+    const relation = String(edge.relation ?? edge.context ?? edge.type ?? '');
+    const explicitID = edge.id == null ? '' : String(edge.id);
+    const semanticKey = normalizedEdgeSemanticKey(source, target, relation, edge);
     return {
       ...edge,
-      id: String(edge.id ?? `${source}-${target}-${index}`),
+      id: explicitID,
+      semanticKey,
       source,
       target,
-      relation: String(edge.relation ?? edge.context ?? edge.type ?? '')
+      relation
     };
-  }).filter((edge) => nodeIds.has(edge.source) && nodeIds.has(edge.target));
+  }).filter((edge) => nodeIds.has(edge.source) && nodeIds.has(edge.target)).map((edge) => {
+    if (edge.id) {
+      delete edge.semanticKey;
+      return edge;
+    }
+    const ordinal = idlessOrdinals.get(edge.semanticKey) ?? 0;
+    idlessOrdinals.set(edge.semanticKey, ordinal + 1);
+    const baseID = `edge:${edge.semanticKey}:${ordinal}`;
+    let candidateID = baseID;
+    let collisionOrdinal = 1;
+    while (usedEdgeIDs.has(candidateID)) {
+      candidateID = `${baseID}:derived-${collisionOrdinal}`;
+      collisionOrdinal += 1;
+    }
+    usedEdgeIDs.add(candidateID);
+    edge.id = candidateID;
+    delete edge.semanticKey;
+    return edge;
+  });
 
   return { nodes, edges };
+}
+
+function evidenceScalar(value) {
+  return value === null || ['string', 'number', 'boolean'].includes(typeof value) ? value : '';
+}
+
+function evidenceEndpoint(value) {
+  const candidate = value && typeof value === 'object'
+    ? value.id ?? value.label ?? value.name
+    : value;
+  return evidenceScalar(candidate);
+}
+
+function evidenceInputForGraphPayload(payload) {
+  const rawNodes = Array.isArray(payload?.nodes) ? payload.nodes : [];
+  const rawEdges = Array.isArray(payload?.edges)
+    ? payload.edges
+    : (Array.isArray(payload?.links) ? payload.links : []);
+  return {
+    nodes: rawNodes.map((node) => ({
+      id: evidenceScalar(node?.id),
+      label: evidenceScalar(node?.label ?? node?.title ?? node?.name),
+      source_file: evidenceScalar(node?.source_file ?? node?._source_file ?? node?.sourceFile),
+      community: evidenceScalar(node?.community ?? node?.community_name ?? node?.group ?? node?.cluster),
+      mtime: evidenceScalar(node?.mtime ?? node?.modified_at ?? node?.modifiedAt ?? node?.updated_at ?? node?.updatedAt),
+      status: evidenceScalar(node?.status),
+      category: evidenceScalar(node?.category ?? node?.type)
+    })),
+    edges: rawEdges.map((edge) => ({
+      id: evidenceScalar(edge?.id),
+      source: evidenceEndpoint(edge?.source ?? edge?.from),
+      target: evidenceEndpoint(edge?.target ?? edge?.to),
+      relation: evidenceScalar(edge?.relation ?? edge?.type),
+      context: evidenceScalar(edge?.context),
+      source_file: evidenceScalar(edge?.source_file ?? edge?._source_file ?? edge?.sourceFile)
+    }))
+  };
 }
 
 function endpointId(value) {
@@ -346,6 +461,30 @@ function endpointId(value) {
     return String(value.id ?? value.label ?? value.name ?? '');
   }
   return String(value ?? '');
+}
+
+function normalizedEdgeSemanticKey(source, target, relation, edge) {
+  const attributes = {};
+  const excludedKeys = new Set(['id', 'source', 'from', 'target', 'to']);
+  Object.keys(edge).sort().forEach((key) => {
+    if (!excludedKeys.has(key)) {
+      attributes[key] = canonicalEdgeValue(edge[key]);
+    }
+  });
+  return JSON.stringify({ source, target, relation, attributes });
+}
+
+function canonicalEdgeValue(value) {
+  if (Array.isArray(value)) {
+    return value.map(canonicalEdgeValue);
+  }
+  if (value && typeof value === 'object') {
+    return Object.keys(value).sort().reduce((result, key) => {
+      result[key] = canonicalEdgeValue(value[key]);
+      return result;
+    }, {});
+  }
+  return value;
 }
 
 function prepareCommunities(graph) {
@@ -366,9 +505,12 @@ function prepareCommunities(graph) {
   state.communityEnabled = new Set(state.communities.map((community) => community.name));
 }
 
-function applyLens(fit = true) {
+async function applyLens(fit = true, { generation = null, emitGraphReady = false } = {}) {
   try {
-    const graph = state.graph ?? { nodes: [], edges: [] };
+    const graph = state.graph;
+    if (!graph) {
+      return false;
+    }
     let lensEdges = graph.edges;
     if (state.lens === 'obsidian') {
       lensEdges = graph.edges.filter(isObsidianEdge);
@@ -389,6 +531,7 @@ function applyLens(fit = true) {
     state.visibleNodes = lensNodes.filter((node) => state.communityEnabled.has(node.community));
     state.visibleNodeIds = new Set(state.visibleNodes.map((node) => node.id));
     state.visibleEdges = lensEdges.filter((edge) => state.visibleNodeIds.has(edge.source) && state.visibleNodeIds.has(edge.target));
+    updateWorkflowHighlight();
     state.hoveredNode = null;
     state.hoveredEdge = null;
     state.hoverVisualNode = null;
@@ -403,20 +546,47 @@ function applyLens(fit = true) {
     clearLivingPulses(false);
     markVisualCacheDirty();
 
-    calculateLayout();
+    const layoutContext = {
+      graphGeneration: generation ?? state.graphGeneration,
+      lens: state.lens,
+      visibleGraphRevision: state.visibleGraphRevision
+    };
+    const didLayout = await requestLayout(layoutContext);
+    const didCommitCurrentLayout = matchesLayoutContext(state.committedLayoutContext, layoutContext);
+    if (!didLayout && !didCommitCurrentLayout) {
+      return false;
+    }
+    if (!isCurrentLayoutContext(layoutContext)) {
+      return false;
+    }
     rebuildMeshes();
     if (fit) {
       fitCameraToGraph('Fit');
     }
+    flushPendingNodeReveal();
     renderSidebar();
     updateOverlay();
     state.lastDiagnostic = '';
     updateHud();
     requestRender();
     startAmbientMotion();
+    if (emitGraphReady && isCurrentLayoutContext(layoutContext)) {
+      window.__brainBarGraphReady = true;
+      window.webkit?.messageHandlers?.brainBarGraphDiagnostic?.postMessage({
+        event: 'graphReady',
+        generation: layoutContext.graphGeneration,
+        lens: layoutContext.lens
+      });
+    }
+    return true;
   } catch (error) {
-    reportDiagnostic(error.message || '3D graph render failed', true);
+    failLayout();
+    return false;
   }
+}
+
+function normalizeLens(lens) {
+  return lens === 'obsidian' || lens === 'graphify' ? lens : 'all';
 }
 
 function activeMode() {
@@ -494,41 +664,324 @@ function isObsidianEdge(edge) {
   return values.some((value) => value === 'obsidian_wikilink' || value.includes('obsidian_wikilink'));
 }
 
-function calculateLayout() {
-  state.positions = new Map();
-  const nodesByCommunity = new Map();
-  const degreeMap = buildDegreeMap(state.visibleEdges);
-  const sortedNodes = [...state.visibleNodes].sort((left, right) => {
-    const communityOrder = String(left.community).localeCompare(String(right.community));
-    return communityOrder !== 0 ? communityOrder : String(left.label).localeCompare(String(right.label));
-  });
-  const nodeCount = Math.max(sortedNodes.length, 1);
-  const outerRadius = clamp(Math.sqrt(nodeCount) * 14.2, 240, 780);
+function requestLayout(layoutContext) {
+  cancelActiveLayoutRequest();
+  const epoch = ++state.layoutEpoch;
+  layoutContext.epoch = epoch;
+  const { graphGeneration, lens, visibleGraphRevision } = layoutContext;
+  state.layoutState = 'starting';
+  state.performanceStats.layoutPreparationMs = 0;
+  state.performanceStats.layoutWorkerComputeMs = 0;
+  state.performanceStats.layoutCommitMs = 0;
+  const preparationStartedAt = performance.now();
+  const nodes = state.visibleNodes.map((node) => ({
+    id: String(node.id),
+    label: String(node.label),
+    community: String(node.community)
+  }));
+  const edges = state.visibleEdges.map((edge) => ({
+    source: String(edge.source),
+    target: String(edge.target)
+  }));
+  state.performanceStats.layoutPreparationMs = performance.now() - preparationStartedAt;
+  const context = { ...layoutContext, graphGeneration, lens, visibleGraphRevision, nodes, edges };
 
-  state.visibleNodes.forEach((node) => {
-    const nodes = nodesByCommunity.get(node.community) ?? [];
-    nodes.push(node);
-    nodesByCommunity.set(node.community, nodes);
+  return new Promise((resolve) => {
+    const request = {
+      resolve,
+      context,
+      ready: false,
+      readyTimer: null,
+      resultTimer: null,
+      settled: false,
+      worker: null
+    };
+    state.activeLayoutRequest = request;
+    const cacheIdentity = currentLayoutCacheIdentity();
+    if (cacheIdentity) {
+      state.performanceStats.layoutCache = 'lookup';
+      void resolveCachedLayout(request, cacheIdentity);
+      return;
+    }
+    state.performanceStats.layoutCache = 'disabled';
+    startWorkerLayout(request);
   });
+}
 
-  sortedNodes.forEach((node, index) => {
-    const seed = hashString(`${node.id}:${node.community}`);
-    const degree = degreeMap.get(node.id) ?? 0;
-    const angle = index * 2.399963229728653 + (seed % 628) / 100;
-    const baseDistance = Math.sqrt((index + 0.5) / nodeCount) * outerRadius;
-    const hubPull = clamp(Math.log1p(degree) / 7, 0, 0.55);
-    const distanceJitter = (((seed % 1000) / 1000) - 0.5) * 34;
-    const distance = clamp((baseDistance * (1 - hubPull * 0.42)) + distanceJitter, 24, outerRadius);
-    const depth = depthForNode(node, 0, index, degreeMap);
-    state.positions.set(node.id, {
-      x: Math.cos(angle) * distance,
-      y: depth,
-      z: Math.sin(angle) * distance
+async function resolveCachedLayout(request, cacheIdentity) {
+  if (layoutCacheTestMode === 'hold') {
+    state.layoutState = 'holding-cache';
+    await new Promise((resolve) => {
+      state.heldLayoutCacheLookup = { request, resolve };
     });
-  });
+  }
+  const cachedCoordinates = await readLayoutCache(cacheIdentity, request.context.nodes.length);
+  if (state.activeLayoutRequest !== request || request.settled || !isCurrentLayoutContext(request.context)) {
+    return;
+  }
+  if (cachedCoordinates) {
+    const positions = unpackCachedLayoutPositions(cachedCoordinates, request.context.nodes);
+    if (positions) {
+      const commitStartedAt = performance.now();
+      state.positions = positions;
+      state.performanceStats.layoutWorkerComputeMs = 0;
+      state.performanceStats.layoutCommitMs = performance.now() - commitStartedAt;
+      state.performanceStats.layoutCache = 'hit';
+      state.layoutState = 'committed';
+      state.committedLayoutContext = request.context;
+      settleLayoutRequest(request, true);
+      return;
+    }
+  }
+  state.performanceStats.layoutCache = 'miss';
+  startWorkerLayout(request);
+}
 
-  relaxLayout(nodesByCommunity);
-  expandDepthForSideViews();
+function startWorkerLayout(request) {
+  const { context } = request;
+  if (state.activeLayoutRequest !== request || request.settled || !isCurrentLayoutContext(context)) {
+    return;
+  }
+  if (layoutWorkerTestMode === 'failStartup' || typeof Worker !== 'function') {
+    finishLayoutFailure(context, request.resolve);
+    return;
+  }
+  let worker;
+  try {
+    worker = new Worker(new URL('./graph3d-layout-worker.mjs', import.meta.url), {
+      type: 'module',
+      name: 'brainbar-3d-layout'
+    });
+  } catch (_) {
+    finishLayoutFailure(context, request.resolve);
+    return;
+  }
+  request.worker = worker;
+    request.readyTimer = window.setTimeout(() => finishLayoutFailure(context, request.resolve), 6000);
+    worker.onmessage = ({ data }) => {
+      if (state.activeLayoutRequest !== request || request.settled) {
+        return;
+      }
+      if (data?.type === 'ready') {
+        request.ready = true;
+        window.clearTimeout(request.readyTimer);
+        request.readyTimer = null;
+        state.layoutState = 'running';
+        request.resultTimer = window.setTimeout(() => finishLayoutFailure(context, request.resolve), 60000);
+        try {
+          worker.postMessage({ type: 'layout', ...context });
+        } catch (_) {
+          finishLayoutFailure(context, request.resolve);
+        }
+        return;
+      }
+      if (data?.type === 'result') {
+        if (layoutWorkerTestMode === 'holdResult' && !state.heldLayoutResult) {
+          state.heldLayoutResult = { request, result: data };
+          state.layoutState = 'holding';
+          return;
+        }
+        finishLayoutResult(request, data);
+        return;
+      }
+      finishLayoutFailure(context, request.resolve);
+    };
+    worker.onerror = () => finishLayoutFailure(context, request.resolve);
+    worker.onmessageerror = () => finishLayoutFailure(context, request.resolve);
+}
+
+function cancelActiveLayoutRequest() {
+  const request = state.activeLayoutRequest;
+  if (!request || request.settled) {
+    return;
+  }
+  request.settled = true;
+  window.clearTimeout(request.readyTimer);
+  window.clearTimeout(request.resultTimer);
+  request.worker?.terminate();
+  state.activeLayoutRequest = null;
+  if (state.heldLayoutResult?.request === request) {
+    state.heldLayoutResult = null;
+  }
+  if (state.heldLayoutCacheLookup?.request === request) {
+    const heldLookup = state.heldLayoutCacheLookup;
+    state.heldLayoutCacheLookup = null;
+    heldLookup.resolve();
+  }
+  request.resolve(false);
+}
+
+function releaseHeldLayoutWorkerResult() {
+  const held = state.heldLayoutResult;
+  state.heldLayoutResult = null;
+  if (!held || state.activeLayoutRequest !== held.request || held.request.settled) {
+    return false;
+  }
+  finishLayoutResult(held.request, held.result);
+  return true;
+}
+
+function releaseHeldLayoutCacheLookup() {
+  const heldLookup = state.heldLayoutCacheLookup;
+  state.heldLayoutCacheLookup = null;
+  if (!heldLookup || state.activeLayoutRequest !== heldLookup.request || heldLookup.request.settled) {
+    return false;
+  }
+  heldLookup.resolve();
+  return true;
+}
+
+function finishLayoutResult(request, result) {
+  const { context } = request;
+  if (!matchesLayoutContext(result, context) || !isCurrentLayoutContext(context)) {
+    settleLayoutRequest(request, false);
+    return;
+  }
+  const positions = unpackLayoutPositions(result, context.nodes);
+  if (!positions) {
+    finishLayoutFailure(context, request.resolve);
+    return;
+  }
+  const commitStartedAt = performance.now();
+  state.positions = positions;
+  state.performanceStats.layoutWorkerComputeMs = Number.isFinite(result.workerComputeMs) ? result.workerComputeMs : 0;
+  state.performanceStats.layoutCommitMs = performance.now() - commitStartedAt;
+  state.layoutState = 'committed';
+  state.committedLayoutContext = context;
+  const cacheIdentity = currentLayoutCacheIdentity(context);
+  if (cacheIdentity) {
+    void writeLayoutCache(cacheIdentity, context.nodes.length, result.positions).then((didWrite) => {
+      if (matchesLayoutContext(state.committedLayoutContext, context) && isCurrentLayoutContext(context)) {
+        state.performanceStats.layoutCache = didWrite ? 'stored' : 'miss';
+      }
+    });
+  }
+  settleLayoutRequest(request, true);
+}
+
+function finishLayoutFailure(context, resolve) {
+  const request = state.activeLayoutRequest;
+  if (request?.context.epoch === context.epoch) {
+    state.layoutState = 'failed';
+    settleLayoutRequest(request, false);
+  }
+  if (!request || request.context.epoch !== context.epoch) {
+    resolve(false);
+  }
+  if (isCurrentLayoutContext(context)) {
+    state.layoutState = 'failed';
+    failLayout();
+  }
+}
+
+function settleLayoutRequest(request, value) {
+  if (request.settled) {
+    return;
+  }
+  request.settled = true;
+  window.clearTimeout(request.readyTimer);
+  window.clearTimeout(request.resultTimer);
+  if (request.worker) {
+    request.worker.onmessage = null;
+    request.worker.onerror = null;
+    request.worker.onmessageerror = null;
+  }
+  if (!value) {
+    request.worker?.terminate();
+  }
+  if (state.activeLayoutRequest === request) {
+    state.activeLayoutRequest = null;
+  }
+  if (state.heldLayoutResult?.request === request) {
+    state.heldLayoutResult = null;
+  }
+  request.resolve(value);
+}
+
+function matchesLayoutContext(result, context) {
+  return result?.epoch === context.epoch
+    && result?.graphGeneration === context.graphGeneration
+    && result?.lens === context.lens
+    && result?.visibleGraphRevision === context.visibleGraphRevision;
+}
+
+function isCurrentLayoutContext(context) {
+  return context.graphGeneration === state.graphGeneration
+    && context.lens === state.lens
+    && context.visibleGraphRevision === state.visibleGraphRevision
+    && context.epoch === state.layoutEpoch;
+}
+
+function unpackLayoutPositions(result, expectedNodes) {
+  if (!Array.isArray(result?.nodeIds) || result.nodeIds.length !== expectedNodes.length) {
+    return null;
+  }
+  const idsMatch = result.nodeIds.every((id, index) => id === expectedNodes[index].id);
+  if (!idsMatch || !(result.positions instanceof ArrayBuffer) || result.positions.byteLength !== expectedNodes.length * 3 * Float64Array.BYTES_PER_ELEMENT) {
+    return null;
+  }
+  const packed = new Float64Array(result.positions);
+  const positions = new Map();
+  for (let index = 0; index < expectedNodes.length; index += 1) {
+    const x = packed[index * 3];
+    const y = packed[index * 3 + 1];
+    const z = packed[index * 3 + 2];
+    if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(z)) {
+      return null;
+    }
+    positions.set(expectedNodes[index].id, { x, y, z });
+  }
+  return positions;
+}
+
+function unpackCachedLayoutPositions(coordinates, expectedNodes) {
+  if (!(coordinates instanceof Float64Array) || coordinates.length !== expectedNodes.length * 3) {
+    return null;
+  }
+  const positions = new Map();
+  for (let index = 0; index < expectedNodes.length; index += 1) {
+    const x = coordinates[index * 3];
+    const y = coordinates[index * 3 + 1];
+    const z = coordinates[index * 3 + 2];
+    if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(z)) {
+      return null;
+    }
+    positions.set(expectedNodes[index].id, { x, y, z });
+  }
+  return positions;
+}
+
+function currentLayoutCacheIdentity(context = null) {
+  const parameters = new URLSearchParams(window.location.search);
+  const digest = parameters.get('digest');
+  const allCommunitiesEnabled = state.communityEnabled.size === state.communities.length
+    && state.communities.every((community) => state.communityEnabled.has(community.name));
+  if (
+    !isBrainBarWebKitScheme() ||
+    layoutWorkerTestMode ||
+    graphIdentityTestMode ||
+    (layoutCacheTestMode && !layoutCacheTestEnabled) ||
+    !allCommunitiesEnabled ||
+    !isLayoutCacheDigest(digest) ||
+    (context && context.lens !== state.lens)
+  ) {
+    return null;
+  }
+  return { digest, lens: normalizeLayoutCacheLens(context?.lens ?? state.lens) };
+}
+
+function failLayout() {
+  window.__brainBarGraphReady = false;
+  reportDiagnostic('3D graph layout could not be completed', true);
+}
+
+function flushPendingNodeReveal() {
+  const nodeId = state.pendingNodeRevealId;
+  state.pendingNodeRevealId = '';
+  const node = nodeId ? nodeForId(nodeId) : null;
+  if (node) {
+    revealSearchNode(node);
+  }
 }
 
 function buildDegreeMap(edges) {
@@ -568,100 +1021,6 @@ function buildEdgeMap(edges) {
     edgeMap.get(edge.target).push(edge);
   });
   return edgeMap;
-}
-
-function depthForNode(node, communityIndex, localIndex, degreeMap) {
-  const seed = hashString(`${node.id}:${node.community}`);
-  const degree = degreeMap.get(node.id) ?? 0;
-  const hubLift = Math.min(260, Math.log1p(degree) * 38);
-  const communityBand = ((hashString(node.community) % 29) - 14) * 24;
-  const organicLayer = (((seed % 1000) / 1000) - 0.5) * 520;
-  const localWave = Math.sin((localIndex + 1) * 1.618 + (seed % 97)) * 150;
-  return clamp(communityBand + organicLayer + localWave + hubLift - 126, -980, 1120);
-}
-
-function depthLayerOffset(communityIndex, communityCount, clusterRadius) {
-  const layerCount = Math.min(11, Math.max(5, Math.ceil(Math.sqrt(communityCount))));
-  const layer = (communityIndex % layerCount) - (layerCount - 1) / 2;
-  const sweep = (Math.floor(communityIndex / layerCount) % 3) - 1;
-  const layerSpacing = clamp((clusterRadius / layerCount) * 1.85, 95, 190);
-  return (layer * layerSpacing) + (sweep * layerSpacing * 0.32);
-}
-
-function relaxLayout(nodesByCommunity) {
-  const visibleIds = new Set(state.visibleNodes.map((node) => node.id));
-  const iterations = Math.min(30, Math.max(12, Math.floor(state.visibleEdges.length / 60)));
-  for (let iteration = 0; iteration < iterations; iteration += 1) {
-    state.visibleEdges.forEach((edge) => {
-      if (!visibleIds.has(edge.source) || !visibleIds.has(edge.target)) {
-        return;
-      }
-      const source = state.positions.get(edge.source);
-      const target = state.positions.get(edge.target);
-      const dx = target.x - source.x;
-      const dz = target.z - source.z;
-      const length = Math.max(Math.hypot(dx, dz), 0.001);
-      const force = (length - 68) * 0.003;
-      const ox = (dx / length) * force;
-      const oz = (dz / length) * force;
-      source.x += ox;
-      source.z += oz;
-      target.x -= ox;
-      target.z -= oz;
-    });
-
-    if (iteration % 5 === 0) {
-      separateLocalNodes(nodesByCommunity);
-    }
-  }
-}
-
-function expandDepthForSideViews() {
-  if (!state.visibleNodes.length || !state.positions.size) {
-    return;
-  }
-
-  const bounds = boundsForVisibleNodes();
-  const width = Math.max(bounds.maxX - bounds.minX, 120);
-  const depth = Math.max(bounds.maxZ - bounds.minZ, 120);
-  const currentY = Math.max(bounds.maxY - bounds.minY, 1);
-  const planarSpan = Math.max(width, depth);
-  const targetY = clamp(planarSpan * 1.02, 920, 1900);
-
-  if (currentY >= targetY * 0.9) {
-    return;
-  }
-
-  const centerY = (bounds.minY + bounds.maxY) / 2;
-  const scale = targetY / currentY;
-  state.positions.forEach((position) => {
-    position.y = centerY + (position.y - centerY) * scale;
-  });
-}
-
-function separateLocalNodes(nodesByCommunity) {
-  const minDistance = 13;
-  nodesByCommunity.forEach((nodes) => {
-    for (let leftIndex = 0; leftIndex < nodes.length; leftIndex += 1) {
-      const left = state.positions.get(nodes[leftIndex].id);
-      for (let rightIndex = leftIndex + 1; rightIndex < nodes.length; rightIndex += 1) {
-        const right = state.positions.get(nodes[rightIndex].id);
-        const dx = right.x - left.x;
-        const dz = right.z - left.z;
-        const distance = Math.max(Math.hypot(dx, dz), 0.001);
-        if (distance >= minDistance) {
-          continue;
-        }
-        const push = (minDistance - distance) * 0.24;
-        const ox = dx === 0 && dz === 0 ? push : (dx / distance) * push;
-        const oz = dx === 0 && dz === 0 ? 0 : (dz / distance) * push;
-        left.x -= ox;
-        left.z -= oz;
-        right.x += ox;
-        right.z += oz;
-      }
-    }
-  });
 }
 
 function pointOnDisc(index, count, radius) {
@@ -887,19 +1246,22 @@ function resize() {
 }
 
 function render() {
+  state.paintedCountsSettled = false;
   controls.update();
   if (renderHiddenWebGLLayer) {
     renderer.render(scene, camera);
   }
   updateHoverIntensity();
-  renderVisualOverlay();
+  if (renderVisualOverlay() && state.layoutState === 'committed') {
+    completePaintedCounts();
+  }
   state.lastFrameStatus = state.visibleProjectedNodeCount > 0 ? 'Visible' : 'Waiting for view';
   updateHud();
 }
 
 function renderVisualOverlay() {
   if (!graphVisual || !visualContext || !staticVisualContext) {
-    return;
+    return false;
   }
 
   const startedAt = performance.now();
@@ -914,7 +1276,7 @@ function renderVisualOverlay() {
     state.performanceStats.visualPixelRatio = metrics.pixelRatio;
     visualContext.setTransform(metrics.pixelRatio, 0, 0, metrics.pixelRatio, 0, 0);
     visualContext.clearRect(0, 0, metrics.width, metrics.height);
-    return;
+    return true;
   }
 
   state.performanceStats.visualPixelRatio = metrics.pixelRatio;
@@ -926,6 +1288,16 @@ function renderVisualOverlay() {
   const frameMs = performance.now() - startedAt;
   state.performanceStats.overlayFrameMs = frameMs;
   updateOverlayQuality(frameMs);
+  return true;
+}
+
+function completePaintedCounts() {
+  const projected = state.projectedPoints ?? new Map();
+  state.paintedNodeCount = projected.size;
+  state.paintedEdgeCount = state.visibleEdges.reduce((count, edge) => (
+    projected.has(edge.source) && projected.has(edge.target) ? count + 1 : count
+  ), 0);
+  state.paintedCountsSettled = true;
 }
 
 function ensureVisualCanvas() {
@@ -1145,6 +1517,7 @@ function drawVisualFrame({ width, height, pixelRatio }) {
   if (shouldDrawAgentActivity()) {
     drawAgentActivityOverlay(width, height);
   }
+  drawWorkflowHighlightOverlay(width, height);
 
   if (hoverAmount > 0.01) {
     visualContext.save();
@@ -1436,6 +1809,51 @@ function drawAgentActivityOverlay(width, height) {
       visualContext.globalAlpha = 0.36 * ageFade;
       visualContext.fill();
     }
+  });
+  visualContext.restore();
+}
+
+function drawWorkflowHighlightOverlay(width, height) {
+  const highlight = state.workflowHighlight;
+  if (!highlight?.nodeIds?.length || !state.projectedPoints.size) {
+    return;
+  }
+  const nodeIds = new Set(highlight.nodeIds);
+  visualContext.save();
+  state.visibleEdges.forEach((edge) => {
+    if (!nodeIds.has(edge.source) || !nodeIds.has(edge.target)) {
+      return;
+    }
+    const source = state.projectedPoints.get(edge.source);
+    const target = state.projectedPoints.get(edge.target);
+    if (!source || !target) {
+      return;
+    }
+    visualContext.beginPath();
+    visualContext.moveTo(source.x, source.y);
+    visualContext.lineTo(target.x, target.y);
+    visualContext.strokeStyle = 'rgba(126, 231, 203, 0.82)';
+    visualContext.lineWidth = 2.2;
+    visualContext.shadowColor = 'rgba(126, 231, 203, 0.72)';
+    visualContext.shadowBlur = prefersReducedMotion ? 0 : 10;
+    visualContext.stroke();
+  });
+  highlight.nodeIds.forEach((nodeId) => {
+    const node = nodeForId(nodeId);
+    const point = state.projectedPoints.get(nodeId);
+    if (!node || !point) {
+      return;
+    }
+    const radius = nodeRadiusForDegree(state.degreeByNode.get(node.id) ?? 0, depthPresence(point.z));
+    visualContext.beginPath();
+    visualContext.arc(point.x, point.y, radius + 12, 0, Math.PI * 2);
+    visualContext.fillStyle = 'rgba(126, 231, 203, 0.14)';
+    visualContext.fill();
+    visualContext.beginPath();
+    visualContext.arc(point.x, point.y, radius + 8, 0, Math.PI * 2);
+    visualContext.strokeStyle = 'rgba(154, 246, 219, 0.96)';
+    visualContext.lineWidth = 2;
+    visualContext.stroke();
   });
   visualContext.restore();
 }
@@ -2184,6 +2602,7 @@ function requestRender() {
 }
 
 function markVisualCacheDirty() {
+  state.paintedCountsSettled = false;
   state.visualCacheDirty = true;
   state.visualRevision += 1;
   state.projectedPointGrid = null;
@@ -2231,7 +2650,189 @@ function renderSidebar() {
   renderSearchResults();
 }
 
+function graphEvidenceReport() {
+  const evidence = window.BrainBarGraphEvidence;
+  if (!evidence?.build) {
+    return null;
+  }
+  if (state.evidenceReport) {
+    return state.evidenceReport;
+  }
+  if (!state.evidenceInput) {
+    return null;
+  }
+  state.evidenceNow = Date.now();
+  state.evidenceReport = evidence.build(state.evidenceInput, { now: state.evidenceNow });
+  state.evidenceInput = null;
+  return state.evidenceReport;
+}
+
+function evidenceValueText3D(value) {
+  if (value === undefined || value === null || value === '') return 'not specified';
+  if (typeof value !== 'object') return String(value);
+  const stable = (item) => {
+    if (item === null || typeof item !== 'object') return item;
+    return Array.isArray(item)
+      ? item.map(stable)
+      : Object.keys(item).sort().reduce((result, key) => {
+          result[key] = stable(item[key]);
+          return result;
+        }, {});
+  };
+  return JSON.stringify(stable(value));
+}
+
+function proposalSubjectText3D(proposal) {
+  const subject = proposal.subject || {};
+  const summary = (values, label) => {
+    const entries = values || [];
+    const sample = entries.slice(0, 3).join(', ') || 'none';
+    return `${label} (${entries.length}): ${sample}${entries.length > 3 ? ', …' : ''}`;
+  };
+  return `${summary(subject.nodeIds, 'Nodes')} · ${summary(subject.edgeIds, 'Edges')} · ${summary(subject.sourcePaths, 'Sources')}`;
+}
+
+function renderEvidenceRows3D(rows) {
+  return rows
+    .filter(([, value]) => value !== undefined && value !== null && String(value) !== '')
+    .map(([label, value]) => `<p><strong>${escapeHTML(label)}</strong><span>${escapeHTML(value)}</span></p>`)
+    .join('');
+}
+
+function renderEvidenceLinks3D(title, links) {
+  const rows = links.length
+    ? links.slice(0, 8).map((link) => `<p>${escapeHTML(link.sourceId || 'unknown')} → ${escapeHTML(link.targetId || 'unknown')} · ${escapeHTML(link.relation || link.context || 'link')} · ${escapeHTML(link.provenance || 'Unknown')}</p>`).join('')
+    : '<p class="muted">None in the current graph.</p>';
+  return `<section class="evidence-links"><h4>${escapeHTML(title)} (${links.length})</h4>${rows}</section>`;
+}
+
+function evidenceSignals3D(report, nodeId = '', edgeId = '') {
+  return (report.proposals || []).filter((proposal) => (
+    (proposal.subject?.nodeIds || []).map(String).includes(String(nodeId || '')) ||
+    (proposal.subject?.edgeIds || []).map(String).includes(String(edgeId || ''))
+  ));
+}
+
+function renderEvidenceNodePanel3D(node) {
+  const report = graphEvidenceReport();
+  const item = report?.nodeEvidenceById?.[String(node.id)];
+  if (!item) return '';
+  const signals = evidenceSignals3D(report, node.id);
+  return `
+    <section class="sidebar-section evidence-panel">
+      <h4>Evidence</h4>
+      <div class="sidebar-meta">${renderEvidenceRows3D([
+        ['Community', item.community], ['Modified', item.mtime], ['Status', item.status], ['Category', item.category]
+      ])}</div>
+      ${renderEvidenceLinks3D('Incoming links', item.incoming || [])}
+      ${renderEvidenceLinks3D('Outgoing links', item.outgoing || [])}
+      <section class="evidence-links"><h4>Health signals (${signals.length})</h4>${signals.length
+        ? signals.slice(0, 4).map((proposal) => `<p>${escapeHTML(proposal.severity || 'info')} · ${escapeHTML(evidenceValueText3D(proposal.evidence))}</p>`).join('')
+        : '<p class="muted">No deterministic signals for this item.</p>'}</section>
+  </section>`;
+}
+
+function evidenceItemForInspectedEdge3D(report, edge) {
+  const direct = report?.edgeEvidenceById?.[String(edge?.id || '')];
+  if (direct) return direct;
+  const sourceId = String(evidenceEndpoint(edge?.source ?? edge?.from));
+  const targetId = String(evidenceEndpoint(edge?.target ?? edge?.to));
+  const relation = String(edge?.relation ?? edge?.type ?? '');
+  const context = String(edge?.context ?? '');
+  const sourceFile = String(edge?.source_file ?? edge?._source_file ?? edge?.sourceFile ?? '');
+  return Object.values(report?.edgeEvidenceById || {})
+    .filter((item) => (
+      String(item.sourceId || '') === sourceId &&
+      String(item.targetId || '') === targetId &&
+      String(item.relation || '') === relation &&
+      String(item.context || '') === context &&
+      String(item.sourceFile || '') === sourceFile
+    ))
+    .sort((left, right) => String(left.id).localeCompare(String(right.id)))[0] || null;
+}
+
+function renderEvidenceEdgeInspector3D(edge) {
+  const report = graphEvidenceReport();
+  const item = evidenceItemForInspectedEdge3D(report, edge);
+  if (!item) {
+    return '<p class="muted italic">Connection evidence unavailable.</p>';
+  }
+  const source = report.nodeEvidenceById?.[String(item.sourceId)];
+  const target = report.nodeEvidenceById?.[String(item.targetId)];
+  const signals = evidenceSignals3D(report, '', item.id);
+  return `
+    <section class="sidebar-section evidence-panel">
+      <div class="sidebar-section-header"><h3>Connection evidence</h3><span>read-only</span></div>
+      <div class="sidebar-meta">${renderEvidenceRows3D([
+        ['Link', `${item.sourceId} → ${item.targetId}`], ['Relationship', item.relation], ['Context', item.context], ['Provenance', item.provenance], ['Source', item.sourceFile],
+        ['Source community', source?.community], ['Target community', target?.community], ['Source status', source?.status], ['Target status', target?.status]
+      ])}</div>
+      <section class="evidence-links"><h4>Health signals (${signals.length})</h4>${signals.length
+        ? signals.slice(0, 4).map((proposal) => `<p>${escapeHTML(proposal.severity || 'info')} · ${escapeHTML(evidenceValueText3D(proposal.evidence))}</p>`).join('')
+        : '<p class="muted">No deterministic signals for this connection.</p>'}</section>
+      <div class="sidebar-actions"><button id="close-edge-evidence">Back to node</button></div>
+    </section>`;
+}
+
+function showGraphHealthPanel3D() {
+  const report = graphEvidenceReport();
+  let panel = document.getElementById('graph-health-panel');
+  if (!panel) {
+    panel = document.createElement('section');
+    panel.id = 'graph-health-panel';
+    stage.appendChild(panel);
+  }
+  if (!report) {
+    panel.innerHTML = '<button type="button" data-close-health>Close</button><h2>Graph Check</h2><p>Evidence is unavailable for this graph.</p>';
+    panel.querySelector('[data-close-health]')?.addEventListener('click', () => { panel.hidden = true; });
+    panel.hidden = false;
+    return false;
+  }
+  const caveats = (report.caveats || []).map((caveat) => `<p class="evidence-caveat">${escapeHTML(caveat)}</p>`).join('');
+  const allProposals = report.proposals || [];
+  const visibleProposals = allProposals.slice(0, 100);
+  const proposals = visibleProposals.map((proposal, index) => `
+    <article class="evidence-proposal">
+      <strong>${escapeHTML(proposal.severity || 'info')} · ${escapeHTML(proposal.category || proposal.rule?.id || 'proposal')}</strong>
+      <p>${escapeHTML(evidenceValueText3D(proposal.evidence))}</p>
+      <p class="muted">Rule ${escapeHTML(proposal.rule?.id || 'unknown')} v${escapeHTML(proposal.rule?.version || report.rulesVersion)} · threshold: ${escapeHTML(evidenceValueText3D(proposal.threshold?.rule))}</p>
+      <p class="evidence-caveat">Caveat: ${escapeHTML(evidenceValueText3D(proposal.threshold?.caveat))}</p>
+      <p class="muted">${escapeHTML(proposalSubjectText3D(proposal))}</p>
+      <pre>${escapeHTML(proposal.preview?.text || '')}</pre>
+      <button type="button" data-copy-proposal="${index}" ${proposal.preview?.text ? '' : 'disabled'}>Copy instruction</button>
+    </article>`).join('') || '<p class="muted">No deterministic proposals.</p>';
+  const proposalCount = allProposals.length > visibleProposals.length
+    ? `<p class="evidence-caveat">Showing ${visibleProposals.length} of ${allProposals.length} proposals.</p>`
+    : '';
+  panel.innerHTML = `
+    <button type="button" data-close-health>Close</button>
+    <h2>Graph Check</h2>
+    <p>Read-only evidence schema ${escapeHTML(report.schemaVersion)} · rules ${escapeHTML(report.rulesVersion)}.</p>
+    ${caveats}
+    ${proposalCount}
+    <div class="evidence-proposals">${proposals}</div>`;
+  panel.querySelector('[data-close-health]')?.addEventListener('click', () => { panel.hidden = true; });
+  panel.querySelectorAll('[data-copy-proposal]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const proposal = report.proposals?.[Number(button.dataset.copyProposal)];
+      if (proposal?.preview?.text) {
+        navigator.clipboard?.writeText(proposal.preview.text);
+      }
+    });
+  });
+  panel.hidden = false;
+  return true;
+}
+
 function renderNodeInfo(node) {
+  if (state.inspectedEdge) {
+    nodeInfo.innerHTML = renderEvidenceEdgeInspector3D(state.inspectedEdge);
+    document.getElementById('close-edge-evidence')?.addEventListener('click', () => {
+      state.inspectedEdge = null;
+      renderNodeInfo(state.selectedNode);
+    });
+    return;
+  }
   if (!node) {
     nodeInfo.innerHTML = state.communitySpotlightName
       ? renderCommunitySpotlightPanel()
@@ -2301,6 +2902,7 @@ function renderNodeInfo(node) {
         <p><strong>Community</strong><span>${escapeHTML(node.community)}</span></p>
         ${source ? `<p><strong>Source</strong><span>${escapeHTML(source)}</span></p>` : ''}
       </div>
+      ${renderEvidenceNodePanel3D(node)}
     </section>
     ${state.communitySpotlightName ? renderCommunitySpotlightPanel() : ''}
     ${state.recentOrbitMode ? renderRecentOrbitPanel() : ''}
@@ -2835,29 +3437,76 @@ function renderSearchResults() {
     state.searchResultIds = [];
     return;
   }
+  const activityNodeIds = new Set(state.agentActivityEvents.map((event) => event.nodeId).filter(Boolean));
   const results = searchGraphNodes({
     query,
-    nodes: state.visibleNodes,
+    nodes: state.graph?.nodes.map((node) => ({
+      ...node,
+      __brainBarAgentActive: activityNodeIds.has(node.id)
+    })) || [],
     limit: searchResultLimit
   });
   state.searchResultIds = results.map((result) => result.id);
   results
     .forEach((result) => {
       const node = result.node;
+      const hiddenReason = hiddenSearchResultReason(node);
       const button = document.createElement('button');
       button.className = 'search-item';
       button.innerHTML = `
         <span>${escapeHTML(node.label)}</span>
-        ${result.sourceFile ? `<small>${escapeHTML(result.sourceFile)}</small>` : ''}
+        <small>${escapeHTML(hiddenReason || result.sourceFile || 'Visible in the current graph')}</small>
       `;
-      button.addEventListener('click', () => handleSearchResultClick(node));
+      button.addEventListener('click', () => { void handleSearchResultClick(node); });
       searchResults.appendChild(button);
     });
 }
 
-function handleSearchResultClick(node) {
+function nodeMatchesCurrentLens(node) {
+  if (state.lens === 'all') {
+    return true;
+  }
+  return (state.graph?.edges || []).some((edge) => {
+    if (edge.source !== node.id && edge.target !== node.id) {
+      return false;
+    }
+    return state.lens === 'obsidian' ? isObsidianEdge(edge) : !isObsidianEdge(edge);
+  });
+}
+
+function hiddenSearchResultReason(node) {
+  if (state.visibleNodeIds.has(node.id)) {
+    return '';
+  }
+  if (!nodeMatchesCurrentLens(node)) {
+    return `Hidden by ${state.lens === 'obsidian' ? 'Wikilinks' : 'Graphify'} Source Lens · reveal temporarily`;
+  }
+  if (!state.communityEnabled.has(node.community)) {
+    return `Hidden by community ${node.community} · reveal temporarily`;
+  }
+  return 'Hidden by the current graph view · reveal temporarily';
+}
+
+async function handleSearchResultClick(node) {
   if (!node) {
     return;
+  }
+  if (state.searchRevealRestore) {
+    await restoreSearchRevealFilters(false);
+  }
+  if (!state.visibleNodeIds.has(node.id)) {
+    state.searchRevealRestore = {
+      lens: state.lens,
+      communities: Array.from(state.communityEnabled)
+    };
+    state.lens = 'all';
+    state.communityEnabled.add(node.community);
+    const didReveal = await applyLens(true, { generation: state.graphGeneration, emitGraphReady: false });
+    if (!didReveal) {
+      state.searchRevealRestore = null;
+      return;
+    }
+    node = nodeForId(node.id) || node;
   }
   if (state.pathMode && state.pathSourceId && !state.pathTargetId && node.id !== state.pathSourceId) {
     selectNode(node, true);
@@ -2957,6 +3606,7 @@ function selectNode(node, focusCamera = false, options = {}) {
     applyPathToNode(node);
     return;
   }
+  state.inspectedEdge = null;
   if (!options.preserveSearchReveal) {
     clearSearchReveal(false);
   }
@@ -3759,9 +4409,25 @@ function clearPathMode(render = true) {
   }
 }
 
-function backToAll() {
+async function restoreSearchRevealFilters(fit = true) {
+  const restore = state.searchRevealRestore;
+  if (!restore) {
+    return false;
+  }
+  state.searchRevealRestore = null;
+  state.lens = restore.lens;
+  state.communityEnabled = new Set(restore.communities);
+  await applyLens(fit, { generation: state.graphGeneration, emitGraphReady: false });
+  return true;
+}
+
+async function backToAll() {
+  const shouldRestoreSearchFilters = Boolean(state.searchRevealRestore);
   clearInteractiveModes();
   clearLivingPulses(false);
+  if (shouldRestoreSearchFilters) {
+    await restoreSearchRevealFilters(true);
+  }
   fitCameraToGraph('All');
   renderNodeInfo(state.selectedNode);
   updateHud();
@@ -4179,6 +4845,7 @@ function applyAgentActivitySnapshot(snapshot = {}) {
     const timestampMs = Date.parse(event.timestamp || event.timestampMs || '');
     return {
       id: String(event.id || `${event.agent || 'agent'}:${event.action || 'activity'}:${event.path || nodeId}`),
+      version: Number(event.version || 1),
       action: String(event.action || 'activity').toLowerCase(),
       agent: String(event.agent || 'agent'),
       path: String(event.path || ''),
@@ -4186,6 +4853,14 @@ function applyAgentActivitySnapshot(snapshot = {}) {
       label: String(event.label || event.path || nodeId || ''),
       sourceFile: String(event.sourceFile || event.path || ''),
       pending: Boolean(event.pending) || (nodeId ? !visibleNodeIds.has(nodeId) : true),
+      sessionId: event.sessionId == null ? null : String(event.sessionId),
+      project: event.project == null ? null : String(event.project),
+      source: event.source == null ? null : String(event.source),
+      reason: event.reason == null ? null : String(event.reason),
+      status: event.status == null ? null : String(event.status),
+      workflowId: event.workflowId == null ? null : String(event.workflowId),
+      workflowTitle: event.workflowTitle == null ? null : String(event.workflowTitle),
+      pathRole: event.pathRole == null ? null : String(event.pathRole),
       timestamp: event.timestamp,
       timestampMs: Number.isFinite(timestampMs) ? timestampMs : 0
     };
@@ -4204,9 +4879,30 @@ function applyAgentActivitySnapshot(snapshot = {}) {
   state.agentActivityLastEventAt = snapshot.lastEventAt || normalizedEvents[0]?.timestamp || null;
   state.agentActivityTracingEnabled = Boolean(snapshot.tracingEnabled);
   state.agentActivityEventLogPath = String(snapshot.eventLogPath || '');
+  state.agentActivityWorkflows = Array.isArray(snapshot.workflows) ? snapshot.workflows : [];
+  updateWorkflowHighlight();
   renderSidebar();
   updateHud();
   requestRender();
+}
+
+function updateWorkflowHighlight() {
+  const workflow = state.agentActivityWorkflows.find((candidate) => (
+    String(candidate?.id || '') === String(state.workflowSelectionID || '')
+  ));
+  if (!workflow) {
+    state.workflowHighlight = { workflowID: '', nodeIds: [], pendingPaths: [] };
+    return;
+  }
+  const visibleNodeIds = state.visibleNodeIds || new Set();
+  state.workflowHighlight = {
+    workflowID: String(workflow.id || ''),
+    nodeIds: Array.from(new Set((Array.isArray(workflow.nodeIds) ? workflow.nodeIds : [])
+      .map(String)
+      .filter((nodeId) => visibleNodeIds.has(nodeId)))).sort(),
+    pendingPaths: Array.from(new Set((Array.isArray(workflow.pendingPaths) ? workflow.pendingPaths : [])
+      .map(String))).sort()
+  };
 }
 
 function nodeForId(nodeId) {
@@ -4214,7 +4910,7 @@ function nodeForId(nodeId) {
   return Number.isInteger(index) ? state.visibleNodes[index] : null;
 }
 
-function reportDiagnostic(message, showsOverlay = false) {
+function reportDiagnostic(message, showsOverlay = false, generation = state.graphGeneration) {
   const text = String(message || '3D renderer failed');
   state.lastDiagnostic = text;
   updateHud();
@@ -4224,6 +4920,7 @@ function reportDiagnostic(message, showsOverlay = false) {
   if (window.webkit?.messageHandlers?.brainBarGraphDiagnostic) {
     window.webkit.messageHandlers.brainBarGraphDiagnostic.postMessage({
       message: text,
+      generation,
       lens: state.lens,
       nodes: state.visibleNodes.length,
       edges: state.visibleEdges.length,
@@ -4269,6 +4966,7 @@ function wireEvents() {
   renderer?.domElement?.addEventListener('click', (event) => {
     markLivingInteraction();
     const node = nodeAtEvent(event);
+    const edge = node ? null : edgeAtEvent(event);
     if (node) {
       if (state.pathMode && state.pathSourceId && !state.pathTargetId && node.id !== state.pathSourceId) {
         applyPathToNode(node);
@@ -4277,7 +4975,14 @@ function wireEvents() {
       } else {
         selectNode(node);
       }
+    } else if (edge) {
+      state.inspectedEdge = edge;
+      renderNodeInfo(state.selectedNode);
     } else if (state.selectedNode || state.focusMode || state.pathMode || state.searchRevealNodeId) {
+      if (state.searchRevealRestore) {
+        void backToAll();
+        return;
+      }
       clearFocusOrbit(false);
       clearPathMode(false);
       clearSearchReveal(false);
@@ -4298,6 +5003,9 @@ function wireEvents() {
   });
 
   search.addEventListener('input', renderSearchResults);
+  document.addEventListener('click', scheduleGraphSessionState);
+  document.addEventListener('input', scheduleGraphSessionState);
+  document.addEventListener('change', scheduleGraphSessionState);
   window.addEventListener('resize', resize);
   document.addEventListener('visibilitychange', () => {
     if (!document.hidden) {
@@ -4402,38 +5110,231 @@ function createPointTexture() {
 }
 
 function installWindowAPI() {
-  window.brainBarLoadGraph = (payload, lens = 'all') => {
+  if (layoutWorkerTestMode === 'holdResult') {
+    window.__brainBarLayoutWorkerTestRelease = releaseHeldLayoutWorkerResult;
+  }
+  if (graphIdentityTestMode) {
+    window.__brainBarGraphIdentitySnapshot = () => ({
+      nodeIDs: (state.graph?.nodes ?? []).map((node) => node.id).sort(),
+      edgeIdentities: (state.graph?.edges ?? [])
+        .map((edge) => [edge.id, edge.source, edge.target, edge.relation])
+        .sort((left, right) => JSON.stringify(left).localeCompare(JSON.stringify(right)))
+    });
+    window.__brainBarGraphIdentityInspectEdge = (edgeId) => {
+      const edge = state.edgeById.get(String(edgeId));
+      if (!edge) return false;
+      state.inspectedEdge = edge;
+      renderNodeInfo(state.selectedNode);
+      return true;
+    };
+  }
+  if (layoutCacheTestEnabled) {
+    window.__brainBarLayoutCacheTest = {
+      clear: clearLayoutCacheForTesting,
+      corrupt: async () => {
+        const identity = currentLayoutCacheIdentity();
+        if (!identity) {
+          return false;
+        }
+        return await overwriteLayoutCacheForTesting({
+          key: layoutCacheKey(identity),
+          schemaVersion: 0,
+          digest: identity.digest,
+          lens: identity.lens,
+          nodeCount: 0,
+          coordinates: new ArrayBuffer(0)
+        });
+      },
+      snapshot: () => {
+        const packed = new Float64Array(state.visibleNodes.length * 3);
+        state.visibleNodes.forEach((node, index) => {
+          const position = state.positions.get(node.id);
+          packed[index * 3] = position?.x ?? NaN;
+          packed[index * 3 + 1] = position?.y ?? NaN;
+          packed[index * 3 + 2] = position?.z ?? NaN;
+        });
+        const bytes = new Uint8Array(packed.buffer);
+        let fingerprint = 2166136261;
+        for (const byte of bytes) {
+          fingerprint = Math.imul(fingerprint ^ byte, 16777619) >>> 0;
+        }
+        return { count: state.visibleNodes.length, fingerprint: fingerprint.toString(16) };
+      },
+      release: releaseHeldLayoutCacheLookup
+    };
+  }
+  window.brainBarNormalizeGraphLens = normalizeLens;
+  window.brainBarAbortGraphLoad = () => {
+    state.graphLoadEpoch += 1;
+    state.graphLoadController?.abort();
+    state.graphLoadController = null;
+    cancelActiveLayoutRequest();
+    window.__brainBarGraphReady = false;
+    return true;
+  };
+  window.brainBarLoadGraph = async (payload, lens = 'all', generation = null) => {
+    window.__brainBarGraphReady = false;
     try {
+      const requestedGeneration = Number.isInteger(generation) ? generation : state.graphGeneration + 1;
+      state.graphGeneration = Number.isInteger(state.pendingGraphGeneration)
+        ? Math.max(requestedGeneration, state.pendingGraphGeneration)
+        : requestedGeneration;
+      state.pendingGraphGeneration = null;
+      state.evidenceInput = evidenceInputForGraphPayload(payload);
+      state.evidenceReport = null;
+      state.evidenceNow = null;
       state.graph = normalizeGraph(payload);
-      state.lens = lens;
+      state.lens = normalizeLens(window.__brainBarPendingGraphLens || lens);
       state.selectedNode = null;
+      state.searchRevealRestore = null;
       clearInteractiveModes();
       prepareCommunities(state.graph);
-      applyLens(true);
+      const didLoad = await applyLens(true, { generation: state.graphGeneration, emitGraphReady: true });
+      return didLoad;
     } catch (error) {
-      reportDiagnostic(error.message || '3D graph data could not be loaded', true);
+      failLayout();
+      return false;
     }
   };
 
-  window.brainBarApplyGraphLens = (lens) => {
-    state.lens = lens;
+  window.brainBarLoadGraphFromURL = async (graphURL, metadataURL, lens = 'all', generation = null) => {
+    state.graphLoadEpoch += 1;
+    const epoch = state.graphLoadEpoch;
+    state.graphLoadController?.abort();
+    const controller = new AbortController();
+    state.graphLoadController = controller;
+    try {
+      const graphResponse = await fetch(String(graphURL || ''), { signal: controller.signal });
+      if (!graphResponse.ok && graphResponse.status !== 0) {
+        throw new Error('Graph data unavailable');
+      }
+      const payload = await graphResponse.json();
+      if (epoch !== state.graphLoadEpoch) {
+        return false;
+      }
+      window.__brainBarGraphJSON = payload;
+      window.__brainBarNodeFileMetadata = { byNodeId: {}, bySourceFile: {} };
+      const didLoad = await window.brainBarLoadGraph(payload, lens, generation);
+      if (epoch !== state.graphLoadEpoch) {
+        return false;
+      }
+      const layoutWasSuperseded = Number.isInteger(generation) && state.graphGeneration !== generation;
+      if (!didLoad && !layoutWasSuperseded) {
+        return false;
+      }
+
+      try {
+        const metadataResponse = await fetch(String(metadataURL || ''), { signal: controller.signal });
+        if (!metadataResponse.ok && metadataResponse.status !== 0) {
+          throw new Error('Graph metadata unavailable');
+        }
+        const metadata = await metadataResponse.json();
+        if (epoch !== state.graphLoadEpoch) {
+          return false;
+        }
+        window.__brainBarNodeFileMetadata = metadata && typeof metadata === 'object'
+          ? metadata
+          : { byNodeId: {}, bySourceFile: {} };
+        updateAmbientRecentNodes();
+        renderSidebar();
+        updateHud();
+        requestRender();
+      } catch (error) {
+        if (error?.name !== 'AbortError' && epoch === state.graphLoadEpoch) {
+          reportDiagnostic('3D file metadata could not be loaded', false, generation);
+        }
+      }
+      return didLoad;
+    } catch (error) {
+      if (error?.name !== 'AbortError' && epoch === state.graphLoadEpoch) {
+        reportDiagnostic('3D graph data could not be loaded', true, generation);
+      }
+      return false;
+    } finally {
+      if (epoch === state.graphLoadEpoch) {
+        state.graphLoadController = null;
+      }
+    }
+  };
+
+  window.brainBarApplyGraphLens = async (lens, generation = null) => {
+    window.__brainBarGraphReady = false;
+    const desiredLens = normalizeLens(lens);
+    window.__brainBarPendingGraphLens = desiredLens;
+    if (!state.graph) {
+      if (Number.isInteger(generation)) {
+        state.pendingGraphGeneration = generation;
+      }
+      return false;
+    }
+    state.graphGeneration = Number.isInteger(generation) ? generation : state.graphGeneration + 1;
+    state.lens = desiredLens;
     state.selectedNode = null;
+    state.searchRevealRestore = null;
     clearInteractiveModes();
-    applyLens(true);
+    return await applyLens(true, { generation: state.graphGeneration, emitGraphReady: true });
   };
 
   window.brainBarApplyAgentActivity = (snapshot) => {
     applyAgentActivitySnapshot(snapshot || {});
   };
 
+  window.brainBarApplyWorkflowHighlight = (workflowID) => {
+    state.workflowSelectionID = String(workflowID || '');
+    updateWorkflowHighlight();
+    requestRender();
+  };
+
+  window.brainBarGraphSessionSnapshot = graphSessionSnapshot;
+  window.brainBarApplyGraphSessionState = (value) => {
+    if (!value || typeof value !== 'object' || Number(value.schemaVersion) !== 1) {
+      return false;
+    }
+    const session = { ...value, schemaVersion: 1 };
+    window.__brainBarPendingSessionState = session;
+    if (search && search.value !== String(session.searchQuery || '')) {
+      search.value = String(session.searchQuery || '');
+      renderSearchResults();
+    }
+
+    const pathSource = session.path?.sourceNodeID ? nodeForId(String(session.path.sourceNodeID)) : null;
+    const pathTarget = session.path?.targetNodeID ? nodeForId(String(session.path.targetNodeID)) : null;
+    const focusNode = session.selectedNodeID ? nodeForId(String(session.selectedNodeID)) : null;
+    if (pathSource) {
+      armPathSource(pathSource);
+      if (pathTarget) {
+        applyPathToNode(pathTarget);
+        if (session.path?.variant) {
+          applyPathVariant(String(session.path.variant));
+        }
+      }
+    } else if (session.communityID) {
+      const rawCommunity = String(session.communityID);
+      applyCommunitySpotlight(rawCommunity.startsWith('Community') ? rawCommunity : `Community ${rawCommunity}`);
+    } else if (focusNode && session.focusDepth) {
+      applyFocusOrbit(focusNode, Number(session.focusDepth));
+    } else if (focusNode) {
+      selectNode(focusNode, true);
+    }
+    if (session.cameraState) {
+      applyGraphCameraState(session.cameraState);
+    }
+    scheduleGraphSessionState();
+    return true;
+  };
+
   window.brainBarResetCamera = resetCamera;
   window.brainBarZoom = zoomCamera;
   window.brainBarTopView = topView;
   window.brainBarResetTilt = resetTilt;
+  window.brainBarShowGraphHealth = showGraphHealthPanel3D;
   window.brainBarRevealNode3D = (nodeId) => {
-    const node = nodeForId(String(nodeId || ''));
+    const normalizedNodeId = String(nodeId || '');
+    const node = nodeForId(normalizedNodeId);
     if (node) {
       revealSearchNode(node);
+    } else if (state.layoutState === 'starting' || state.layoutState === 'running') {
+      state.pendingNodeRevealId = normalizedNodeId;
     }
   };
   window.brainBarStartPathFromNode3D = (nodeId) => {
@@ -4474,6 +5375,19 @@ function installWindowAPI() {
     edgeGlintsRuntimeEnabled,
     renderHiddenWebGLLayer,
     activeMode: activeMode(),
+    queryableNodes: state.graph?.nodes.length ?? 0,
+    queryableEdges: state.graph?.edges.length ?? 0,
+    visibleNodes: state.visibleNodes.length,
+    visibleEdges: state.visibleEdges.length,
+    paintedNodes: state.paintedNodeCount,
+    paintedEdges: state.paintedEdgeCount,
+    paintedCountsSettled: state.paintedCountsSettled,
+    selectedNodeCount: state.selectedNode ? 1 : 0,
+    searchResultCount: state.searchResultIds.length,
+    agentActivityEventCount: state.agentActivityEvents.length,
+    agentActivityRenderableCount: state.agentActivityRenderableEvents.length,
+    workflowHighlightNodeCount: state.workflowHighlight.nodeIds.length,
+    workflowHighlightPendingPathCount: state.workflowHighlight.pendingPaths.length,
     nodes: state.visibleNodes.length,
     edges: state.visibleEdges.length,
     highlightedEdges: state.performanceStats.highlightedEdgeCount,
@@ -4487,6 +5401,11 @@ function installWindowAPI() {
     lines: renderer?.info?.render?.lines ?? 0,
     visibleProjectedNodeCount: state.visibleProjectedNodeCount,
     staticRebuildMs: Number(state.performanceStats.staticRebuildMs.toFixed(2)),
+    layoutPreparationMs: Number(state.performanceStats.layoutPreparationMs.toFixed(2)),
+    layoutWorkerComputeMs: Number(state.performanceStats.layoutWorkerComputeMs.toFixed(2)),
+    layoutCommitMs: Number(state.performanceStats.layoutCommitMs.toFixed(2)),
+    layoutCache: state.performanceStats.layoutCache,
+    layoutState: state.layoutState,
     overlayFrameMs: Number(state.performanceStats.overlayFrameMs.toFixed(2)),
     visualPixelRatio: state.performanceStats.visualPixelRatio,
     staticHubGlowCount: state.performanceStats.staticHubGlowCount,
@@ -4498,6 +5417,68 @@ function installWindowAPI() {
     hitTestCandidateCount: state.performanceStats.lastHitTestCandidateCount,
     stageWidth: stage.clientWidth,
     stageHeight: stage.clientHeight,
-    diagnostic: state.lastDiagnostic
+    diagnostic: state.lastDiagnostic ? 'reported' : '',
+    hasDiagnostic: Boolean(state.lastDiagnostic)
   });
+}
+
+function graphSessionSnapshot() {
+  const pending = window.__brainBarPendingSessionState || {};
+  const path = state.pathMode && state.pathSourceId
+    ? {
+        sourceNodeID: state.pathSourceId,
+        targetNodeID: state.pathTargetId || null,
+        variant: state.activePathVariantId || 'shortest'
+      }
+    : (pending.path || null);
+  return {
+    schemaVersion: 1,
+    graphVersion: pending.graphVersion || null,
+    selectedNodeID: state.selectedNode?.id || pending.selectedNodeID || null,
+    sourceLens: normalizeLens(state.lens || pending.sourceLens || 'all'),
+    focusDepth: state.focusMode ? Number(state.focusDepth || 1) : (pending.focusDepth || null),
+    path,
+    communityID: state.communitySpotlightName || pending.communityID || null,
+    searchQuery: String(search?.value || pending.searchQuery || ''),
+    cameraState: camera && controls
+      ? {
+          position: { x: camera.position.x, y: camera.position.y, z: camera.position.z },
+          target: { x: controls.target.x, y: controls.target.y, z: controls.target.z },
+          zoom: camera.zoom,
+          preset: state.cameraPreset || 'Manual'
+        }
+      : (pending.cameraState || null)
+  };
+}
+
+function applyGraphCameraState(cameraState) {
+  const values = [
+    cameraState?.position?.x, cameraState?.position?.y, cameraState?.position?.z,
+    cameraState?.target?.x, cameraState?.target?.y, cameraState?.target?.z,
+    cameraState?.zoom
+  ].map(Number);
+  if (!camera || !controls || values.some((value) => !Number.isFinite(value)) || values[6] <= 0) {
+    return false;
+  }
+  camera.position.set(values[0], values[1], values[2]);
+  controls.target.set(values[3], values[4], values[5]);
+  camera.zoom = clamp(values[6], 0.08, 8);
+  camera.updateProjectionMatrix();
+  camera.lookAt(controls.target);
+  controls.update();
+  state.cameraPreset = String(cameraState.preset || 'Saved view');
+  markVisualCacheDirty();
+  requestRender();
+  return true;
+}
+
+function emitGraphSessionState() {
+  const snapshot = graphSessionSnapshot();
+  window.__brainBarPendingSessionState = snapshot;
+  window.webkit?.messageHandlers?.brainBarGraphSession?.postMessage(snapshot);
+}
+
+function scheduleGraphSessionState() {
+  clearTimeout(window.__brainBarGraphSessionTimer);
+  window.__brainBarGraphSessionTimer = setTimeout(emitGraphSessionState, 0);
 }

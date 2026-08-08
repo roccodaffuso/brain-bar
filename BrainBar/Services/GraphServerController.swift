@@ -33,8 +33,8 @@ final class GraphServerController {
             "--bind", "127.0.0.1",
             "--directory", vaultURL.path
         ]
-        process.standardOutput = Pipe()
-        process.standardError = Pipe()
+        process.standardOutput = FileHandle.nullDevice
+        process.standardError = FileHandle.nullDevice
         try process.run()
         self.process = process
     }

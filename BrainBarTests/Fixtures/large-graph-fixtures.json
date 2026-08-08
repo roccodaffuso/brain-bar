@@ -1,0 +1,37 @@
+{
+  "schema_version": 1,
+  "fixtures": [
+    {
+      "name": "1k",
+      "node_count": 1000,
+      "edge_count": 2380,
+      "community_count": 10,
+      "seed": 439041101,
+      "sha256": "1f7ec933358a7bd1ff5405278d986a3998b4f37f6c4d9df621dfe08071260bad"
+    },
+    {
+      "name": "10k",
+      "node_count": 10000,
+      "edge_count": 23805,
+      "community_count": 50,
+      "seed": 725372254,
+      "sha256": "d7910d8a11fb556179d6fd9542189b70763bea8c06719e06cfd25e8cee16e967"
+    },
+    {
+      "name": "inspected-shape",
+      "node_count": 12547,
+      "edge_count": 29868,
+      "community_count": 64,
+      "seed": 1010580540,
+      "sha256": "e1a4217a3ce6f117ac4155710c67f5f36754d2b3d9599bca08b817506534438f"
+    },
+    {
+      "name": "25k-stress",
+      "node_count": 25000,
+      "edge_count": 59512,
+      "community_count": 100,
+      "seed": 1283429605,
+      "sha256": "976754cd0af582b0a9252c11d8e5211078075931a014ea89387033a0add99479"
+    }
+  ]
+}

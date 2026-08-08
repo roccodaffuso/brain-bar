@@ -187,11 +187,12 @@ When the workflow contract exists, BrainBar should show Hermes work as a visible
 
 The first Agent Workflows implementation should build on existing Agent Activity:
 
-1. Add a runtime workflow grouping layer over recent events.
-2. Group by explicit `session_id` when present, otherwise by agent + project/path proximity + short time window.
-3. Surface compact workflow cards in the 3D sidebar below Agent Activity.
+1. Add a runtime workflow grouping layer over retained Agent Activity metadata.
+2. Group only by explicit `workflow_id`, falling back to explicit `session_id`; do not infer sessions from time, agent, project, or path proximity.
+3. Surface a compact native workflow inspector that remains secondary to the graph.
 4. Highlight touched nodes and pending paths without clearing Search, Path, Focus, Recent Orbit, Graph Story, or Community Spotlight.
-5. Add a detail view for one workflow with source trail, touched files, pending refresh, and useful actions.
+5. Show declared Source/Output roles only when schema v2 provides them; otherwise show a chronological Touched trail.
+6. Reuse Agent Activity retention and deletion controls instead of creating a separate workflow database.
 
 Hermes-specific workflow UI should wait until there is a concrete Hermes event/source contract. A Hermes Activity badge can ship earlier if it uses the same metadata-only `brainbar-trace` path as Codex and Claude.
 
@@ -204,8 +205,7 @@ Hermes Vault Skill work can ship before full workflow projection if it stays beh
 
 ## Open Questions
 
-- Should workflow grouping use only explicit `session_id` at first, or infer short local sessions from timestamps?
-- Should `brainbar-trace` grow optional `workflow_id` and `workflow_title` fields, or should BrainBar derive workflows without changing the event schema?
+- What evidence and approved precision threshold would be required before inferred workflow grouping can be reconsidered?
 - Should future Hermes run state live in the existing JSONL stream, a separate local file, or a future local service API?
 - Should BrainBar install a Hermes Vault Skill only, a project `.hermes.md` block, or both?
 - Should BrainBar ever offer optional instructions for `SOUL.md`, or should it permanently avoid that layer?

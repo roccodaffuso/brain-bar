@@ -9,11 +9,16 @@ struct GraphWebView: NSViewRepresentable {
     let sourceLens: GraphSourceLens
     let reviewQueueStatus: ReviewQueueStatus
     let agentActivitySnapshot: AgentActivitySnapshot
+    let workflowSelectionID: String?
+    var sessionState: GraphSessionState = GraphSessionState()
     let viewportCommand: GraphViewportCommand?
+    let cancellationRequest: GraphLoadCancellationRequest?
+    let onLoadEvent: @MainActor (GraphRendererLoadEvent, Int) -> Void
     let onOpenNode: @MainActor (GraphNodeOpenRequest) -> Void
+    var onSessionState: @MainActor (GraphSessionState) -> Void = { _ in }
 
     func makeCoordinator() -> Coordinator {
-        Coordinator(onOpenNode: onOpenNode)
+        Coordinator(onLoadEvent: onLoadEvent, onOpenNode: onOpenNode, onSessionState: onSessionState)
     }
 
     func makeNSView(context: Context) -> WKWebView {
@@ -22,74 +27,246 @@ struct GraphWebView: NSViewRepresentable {
             configuration.userContentController.addUserScript(userScript)
         }
         configuration.userContentController.add(context.coordinator, name: "brainBarNodeAction")
+        configuration.userContentController.add(context.coordinator, name: "brainBarGraphSession")
 
         let webView = WKWebView(frame: .zero, configuration: configuration)
         webView.allowsMagnification = true
         webView.setValue(false, forKey: "drawsBackground")
         webView.navigationDelegate = context.coordinator
         context.coordinator.sourceLens = sourceLens
+        context.coordinator.sessionState = sessionState
         context.coordinator.reviewQueueScript = Self.reviewQueueTargetsScript(status: reviewQueueStatus)
         context.coordinator.agentActivitySnapshot = agentActivitySnapshot
+        context.coordinator.workflowSelectionID = workflowSelectionID
+        context.coordinator.pendingViewportCommand = viewportCommand
         let graphMetadataPayload = Self.graphMetadataPayload(readAccessURL: readAccessURL)
         context.coordinator.graphMetadataVersion = graphMetadataPayload.version
         context.coordinator.graphMetadataScript = graphMetadataPayload.script
         load(in: webView, context: context)
+        context.coordinator.cancelGraphLoadIfNeeded(cancellationRequest, in: webView)
         return webView
     }
 
     func updateNSView(_ webView: WKWebView, context: Context) {
-        let didLoad = load(in: webView, context: context)
         context.coordinator.onOpenNode = onOpenNode
+        context.coordinator.onSessionState = onSessionState
+        context.coordinator.onLoadEvent = onLoadEvent
+        let didChangeLens = context.coordinator.sourceLens != sourceLens
+        context.coordinator.sourceLens = sourceLens
         let graphMetadataPayload = Self.graphMetadataPayload(readAccessURL: readAccessURL)
         let didUpdateGraphMetadata = context.coordinator.graphMetadataVersion != graphMetadataPayload.version
         context.coordinator.graphMetadataVersion = graphMetadataPayload.version
         context.coordinator.graphMetadataScript = graphMetadataPayload.script
         let reviewQueueScript = Self.reviewQueueTargetsScript(status: reviewQueueStatus)
-        if context.coordinator.reviewQueueScript != reviewQueueScript {
+        let didUpdateReviewQueue = context.coordinator.reviewQueueScript != reviewQueueScript
+        if didUpdateReviewQueue {
             context.coordinator.reviewQueueScript = reviewQueueScript
+        }
+        let didUpdateAgentActivity = context.coordinator.agentActivitySnapshot != agentActivitySnapshot
+        if didUpdateAgentActivity {
+            context.coordinator.agentActivitySnapshot = agentActivitySnapshot
+        }
+        let didUpdateWorkflowSelection = context.coordinator.workflowSelectionID != workflowSelectionID
+        if didUpdateWorkflowSelection {
+            context.coordinator.workflowSelectionID = workflowSelectionID
+        }
+        context.coordinator.pendingViewportCommand = viewportCommand
+        let didChangeSession = context.coordinator.sessionState != sessionState
+        context.coordinator.sessionState = sessionState
+
+        let didLoad = load(in: webView, context: context)
+        let didCancel = context.coordinator.cancelGraphLoadIfNeeded(cancellationRequest, in: webView)
+        guard !didLoad, !didCancel, context.coordinator.graphReady else {
+            return
+        }
+
+        if didUpdateReviewQueue {
             context.coordinator.applyReviewQueueTargets(in: webView)
         }
-        if context.coordinator.agentActivitySnapshot != agentActivitySnapshot {
-            context.coordinator.agentActivitySnapshot = agentActivitySnapshot
+        if didUpdateAgentActivity {
             context.coordinator.applyAgentActivity(in: webView)
         }
+        if didUpdateWorkflowSelection {
+            context.coordinator.applyWorkflowSelection(in: webView)
+        }
         context.coordinator.applyViewportCommandIfNeeded(viewportCommand, in: webView)
-        if didLoad || didUpdateGraphMetadata || context.coordinator.sourceLens != sourceLens {
-            context.coordinator.sourceLens = sourceLens
+        if didChangeSession {
+            context.coordinator.applySessionStateIfNeeded(sessionState, in: webView)
+        }
+        if didUpdateGraphMetadata || didChangeLens {
             context.coordinator.applyLens(sourceLens, in: webView)
         }
     }
 
     @discardableResult
     private func load(in webView: WKWebView, context: Context) -> Bool {
-        guard context.coordinator.loadedURL != fileURL || context.coordinator.reloadToken != reloadToken else {
-            return false
-        }
-        context.coordinator.loadedURL = fileURL
-        context.coordinator.reloadToken = reloadToken
-        webView.loadFileURL(fileURL, allowingReadAccessTo: readAccessURL)
-        return true
+        context.coordinator.requestLoad(
+            fileURL: fileURL,
+            readAccessURL: readAccessURL,
+            reloadToken: reloadToken,
+            in: webView
+        )
     }
 
     final class Coordinator: NSObject, WKNavigationDelegate, WKScriptMessageHandler {
+        private struct PendingLoad {
+            let fileURL: URL
+            let readAccessURL: URL
+            let attempt: Int
+        }
+
         var loadedURL: URL?
+        var activeNavigation: WKNavigation?
         var reloadToken = -1
         var sourceLens: GraphSourceLens = .all
         var graphMetadataVersion = ""
         var graphMetadataScript = ""
         var reviewQueueScript = ""
         var agentActivitySnapshot: AgentActivitySnapshot = .empty
+        var workflowSelectionID: String?
+        var pendingViewportCommand: GraphViewportCommand?
+        var sessionState = GraphSessionState()
+        private var lastAppliedSessionState: GraphSessionState?
+        var graphReady = false
         var lastViewportCommandID = -1
+        private var graphLoadAttempt = -1
+        private var cancelledGraphLoadAttempt: Int?
+        private var lastCancellationRequestID: Int?
+        private var pendingLoad: PendingLoad?
+        private var offlineRuntimeReady = false
+        private var offlineRuntimePreparing = false
+        var onLoadEvent: @MainActor (GraphRendererLoadEvent, Int) -> Void
         var onOpenNode: @MainActor (GraphNodeOpenRequest) -> Void
+        var onSessionState: @MainActor (GraphSessionState) -> Void
 
-        init(onOpenNode: @escaping @MainActor (GraphNodeOpenRequest) -> Void) {
+        init(
+            onLoadEvent: @escaping @MainActor (GraphRendererLoadEvent, Int) -> Void = { _, _ in },
+            onOpenNode: @escaping @MainActor (GraphNodeOpenRequest) -> Void,
+            onSessionState: @escaping @MainActor (GraphSessionState) -> Void = { _ in }
+        ) {
+            self.onLoadEvent = onLoadEvent
             self.onOpenNode = onOpenNode
+            self.onSessionState = onSessionState
+        }
+
+        @discardableResult
+        func requestLoad(
+            fileURL: URL,
+            readAccessURL: URL,
+            reloadToken: Int,
+            in webView: WKWebView
+        ) -> Bool {
+            guard loadedURL != fileURL || self.reloadToken != reloadToken else {
+                return false
+            }
+            loadedURL = fileURL
+            self.reloadToken = reloadToken
+            beginGraphLoad(attempt: reloadToken)
+            pendingLoad = PendingLoad(
+                fileURL: fileURL,
+                readAccessURL: readAccessURL,
+                attempt: reloadToken
+            )
+            prepareOfflineRuntimeIfNeeded(in: webView)
+            return true
+        }
+
+        private func prepareOfflineRuntimeIfNeeded(in webView: WKWebView) {
+            if offlineRuntimeReady {
+                startPendingLoad(in: webView)
+                return
+            }
+            guard !offlineRuntimePreparing else {
+                return
+            }
+            offlineRuntimePreparing = true
+            Graph2DOfflineRuntime.installContentRule(
+                in: webView.configuration.userContentController
+            ) { [weak self, weak webView] _ in
+                guard let self, let webView else {
+                    return
+                }
+                self.offlineRuntimePreparing = false
+                self.offlineRuntimeReady = true
+                self.startPendingLoad(in: webView)
+            }
+        }
+
+        private func startPendingLoad(in webView: WKWebView) {
+            guard let pendingLoad else {
+                return
+            }
+            self.pendingLoad = nil
+            guard
+                pendingLoad.attempt == graphLoadAttempt,
+                !isGraphLoadCancelled(attempt: pendingLoad.attempt)
+            else {
+                return
+            }
+            activeNavigation = webView.loadFileURL(
+                pendingLoad.fileURL,
+                allowingReadAccessTo: pendingLoad.readAccessURL
+            )
         }
 
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+            guard let navigation, navigation === activeNavigation else {
+                return
+            }
             applyReviewQueueTargets(in: webView)
             applyAgentActivity(in: webView)
-            applyLens(sourceLens, in: webView)
+            applyWorkflowSelection(in: webView)
+            applyLens(sourceLens, in: webView) { [weak self] error in
+                guard let self, navigation === self.activeNavigation else {
+                    return
+                }
+                guard error == nil else {
+                    self.reportLoadFailure(.rendererFailed)
+                    return
+                }
+                self.verifyRendererReadiness(in: webView, navigation: navigation)
+            }
+        }
+
+        func webView(
+            _ webView: WKWebView,
+            didFailProvisionalNavigation navigation: WKNavigation!,
+            withError error: Error
+        ) {
+            reportNavigationFailure(error, navigation: navigation)
+        }
+
+        func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
+            reportNavigationFailure(error, navigation: navigation)
+        }
+
+        func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
+            reportLoadFailure(.rendererFailed)
+        }
+
+        @discardableResult
+        func cancelGraphLoadIfNeeded(
+            _ request: GraphLoadCancellationRequest?,
+            in webView: WKWebView
+        ) -> Bool {
+            guard let request, request.id != lastCancellationRequestID else {
+                return false
+            }
+            lastCancellationRequestID = request.id
+            guard request.attempt == graphLoadAttempt, !graphReady else {
+                return false
+            }
+            cancelledGraphLoadAttempt = request.attempt
+            activeNavigation = nil
+            pendingLoad = nil
+            graphReady = false
+            webView.stopLoading()
+            webView.evaluateJavaScript("window.stop();") { _, _ in }
+            return true
+        }
+
+        func isGraphLoadCancelled(attempt: Int) -> Bool {
+            cancelledGraphLoadAttempt == attempt
         }
 
         func applyReviewQueueTargets(in webView: WKWebView) {
@@ -109,6 +286,11 @@ struct GraphWebView: NSViewRepresentable {
             }
             """
             webView.evaluateJavaScript(script)
+        }
+
+        func applyWorkflowSelection(in webView: WKWebView) {
+            let value = GraphWebView.jsStringLiteral(workflowSelectionID ?? "")
+            webView.evaluateJavaScript("if (window.brainBarApplyWorkflowHighlight2D) { window.brainBarApplyWorkflowHighlight2D(\(value)); }")
         }
 
         func applyViewportCommandIfNeeded(_ command: GraphViewportCommand?, in webView: WKWebView) {
@@ -137,24 +319,84 @@ struct GraphWebView: NSViewRepresentable {
             webView.evaluateJavaScript(script)
         }
 
-        func applyLens(_ lens: GraphSourceLens, in webView: WKWebView) {
+        func applyLens(
+            _ lens: GraphSourceLens,
+            in webView: WKWebView,
+            completion: ((Error?) -> Void)? = nil
+        ) {
             let script = """
             \(graphMetadataScript)
             window.__brainBarPendingGraphLens = "\(lens.rawValue)";
             if (window.brainBarApplyGraphLens) {
               window.brainBarApplyGraphLens("\(lens.rawValue)");
             }
-            document.documentElement.classList.remove("brainbar-graph-preparing");
-            document.documentElement.classList.add("brainbar-graph-ready");
             """
-            webView.evaluateJavaScript(script)
+            let attempt = graphLoadAttempt
+            webView.evaluateJavaScript(script) { [weak self] _, error in
+                guard let self, attempt == self.graphLoadAttempt else {
+                    return
+                }
+                if error != nil, completion == nil {
+                    self.reportLoadFailure(.rendererFailed)
+                }
+                completion?(error)
+            }
+        }
+
+        private func verifyRendererReadiness(in webView: WKWebView, navigation: WKNavigation) {
+            let script = """
+            (() => {
+              const diagnostics = window.brainBarRendererDiagnostics2D;
+              if (typeof diagnostics !== 'function') {
+                return 'runtimeUnavailable';
+              }
+              const result = diagnostics();
+              return result?.networkAvailable === true ? 'ready' : 'runtimeUnavailable';
+            })()
+            """
+            webView.evaluateJavaScript(script) { [weak self] result, error in
+                guard let self, navigation === self.activeNavigation else {
+                    return
+                }
+                let readiness = error == nil ? result as? String : nil
+                let isReady = readiness == "ready"
+                let stateScript = isReady
+                    ? "document.documentElement.classList.remove('brainbar-graph-preparing'); document.documentElement.classList.add('brainbar-graph-ready');"
+                    : "document.documentElement.classList.remove('brainbar-graph-ready'); document.documentElement.classList.add('brainbar-graph-preparing');"
+                webView.evaluateJavaScript(stateScript)
+                if isReady {
+                    self.graphReady = true
+                    self.applyViewportCommandIfNeeded(self.pendingViewportCommand, in: webView)
+                    self.applySessionStateIfNeeded(self.sessionState, in: webView)
+                    self.emitLoadEvent(.ready)
+                } else {
+                    self.reportLoadFailure(
+                        readiness == "runtimeUnavailable"
+                            ? .twoDRuntimeUnavailable
+                            : .rendererFailed
+                    )
+                }
+            }
         }
 
         func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
-            guard
-                message.name == "brainBarNodeAction",
-                let body = message.body as? [String: Any]
-            else {
+            guard let body = message.body as? [String: Any] else {
+                return
+            }
+
+            if message.name == "brainBarGraphSession" {
+                guard let state = GraphWebView.decodeGraphSessionState(body) else {
+                    return
+                }
+                sessionState = state
+                lastAppliedSessionState = state
+                Task { @MainActor in
+                    onSessionState(state)
+                }
+                return
+            }
+
+            guard message.name == "brainBarNodeAction" else {
                 return
             }
 
@@ -168,6 +410,83 @@ struct GraphWebView: NSViewRepresentable {
             )
             Task { @MainActor in
                 onOpenNode(request)
+            }
+        }
+
+        func applySessionStateIfNeeded(_ state: GraphSessionState, in webView: WKWebView) {
+            guard graphReady, lastAppliedSessionState != state else {
+                return
+            }
+            lastAppliedSessionState = state
+            let script = "if (window.brainBarApplyGraphSessionState) { window.brainBarApplyGraphSessionState(\(GraphWebView.graphSessionJSON(state))); }"
+            webView.evaluateJavaScript(script)
+        }
+
+        func beginGraphLoad(attempt: Int) {
+            graphLoadAttempt = attempt
+            graphReady = false
+            cancelledGraphLoadAttempt = nil
+            emitLoadEvent(.loading)
+        }
+
+        private func reportNavigationFailure(_ error: Error, navigation: WKNavigation?) {
+            guard let navigation, navigation === activeNavigation else {
+                return
+            }
+            let nsError = error as NSError
+            guard nsError.code != NSURLErrorCancelled else {
+                return
+            }
+            reportLoadFailure(.navigationFailed)
+        }
+
+        private func reportLoadFailure(_ reason: GraphLoadFailure) {
+            graphReady = false
+            guard !isGraphLoadCancelled(attempt: graphLoadAttempt) else {
+                return
+            }
+            emitLoadEvent(.failed(reason))
+        }
+
+        private func emitLoadEvent(_ event: GraphRendererLoadEvent) {
+            guard graphLoadAttempt >= 0 else {
+                return
+            }
+            let attempt = graphLoadAttempt
+            Task { @MainActor [onLoadEvent] in
+                onLoadEvent(event, attempt)
+            }
+        }
+    }
+}
+
+@MainActor
+enum Graph2DOfflineRuntime {
+    static let contentRuleIdentifier = "BrainBarGraph2DOfflineVisNetwork916"
+    static let encodedContentRuleList = #"""
+    [
+      {
+        "trigger": {
+          "url-filter": "^https://unpkg\\.com/vis-network@9\\.1\\.6/standalone/umd/vis-network(?:\\.min)?\\.js(?:\\?.*)?$"
+        },
+        "action": { "type": "block" }
+      }
+    ]
+    """#
+
+    static func installContentRule(
+        in controller: WKUserContentController,
+        completion: @escaping @MainActor (Bool) -> Void
+    ) {
+        WKContentRuleListStore.default().compileContentRuleList(
+            forIdentifier: contentRuleIdentifier,
+            encodedContentRuleList: encodedContentRuleList
+        ) { rule, _ in
+            Task { @MainActor in
+                if let rule {
+                    controller.add(rule)
+                }
+                completion(rule != nil)
             }
         }
     }
@@ -300,13 +619,35 @@ enum GraphMetadataPayloadCache {
     }
 }
 
-private extension GraphWebView {
+extension GraphWebView {
     static func userScripts() -> [WKUserScript] {
         var scripts: [WKUserScript] = []
+        if let visNetwork = bundledResourceString(
+            name: "vis-network.min",
+            extension: "js",
+            subdirectory: "Graph2D/Vendor/vis-network-9.1.6"
+        ) {
+            scripts.append(
+                WKUserScript(
+                    source: offlineVisNetworkBootstrapScript(visNetwork),
+                    injectionTime: .atDocumentStart,
+                    forMainFrameOnly: true
+                )
+            )
+        }
         if let css = bundledResourceString(name: "brainbar-graph-theme", extension: "css", subdirectory: "Graph2D") {
             scripts.append(
                 WKUserScript(
                     source: styleInjectionScript(css: css),
+                    injectionTime: .atDocumentStart,
+                    forMainFrameOnly: true
+                )
+            )
+        }
+        if let evidence = bundledResourceString(name: "brainbar-graph-evidence", extension: "js", subdirectory: "GraphEvidence") {
+            scripts.append(
+                WKUserScript(
+                    source: evidence,
                     injectionTime: .atDocumentStart,
                     forMainFrameOnly: true
                 )
@@ -322,6 +663,46 @@ private extension GraphWebView {
             )
         }
         return scripts
+    }
+
+    static func offlineVisNetworkBootstrapScript(_ source: String) -> String {
+        let sourceLiteral = jsStringLiteral(source)
+        return """
+        (() => {
+          const source = \(sourceLiteral);
+          let namespace;
+          Object.defineProperty(window, "vis", {
+            configurable: true,
+            get() {
+              if (namespace) {
+                Object.defineProperty(window, "vis", {
+                  configurable: true,
+                  writable: true,
+                  value: namespace
+                });
+                return namespace;
+              }
+              delete window.vis;
+              try {
+                Function(source).call(window);
+                namespace = window.vis;
+              } catch (_) {
+                window.__brainBarOfflineVisRuntimeError = "Vis Network runtime unavailable";
+                namespace = {};
+              }
+              Object.defineProperty(window, "vis", {
+                configurable: true,
+                writable: true,
+                value: namespace
+              });
+              return namespace;
+            },
+            set(value) {
+              namespace = value;
+            }
+          });
+        })();
+        """
     }
 
     static func graphMetadataPayload(readAccessURL: URL) -> GraphMetadataPayload {
@@ -370,6 +751,28 @@ private extension GraphWebView {
         return json
     }
 
+    static func graphSessionJSON(_ state: GraphSessionState) -> String {
+        guard
+            let data = try? JSONEncoder().encode(state),
+            let json = String(data: data, encoding: .utf8)
+        else {
+            return "{}"
+        }
+        return json
+    }
+
+    static func decodeGraphSessionState(_ object: [String: Any]) -> GraphSessionState? {
+        guard
+            JSONSerialization.isValidJSONObject(object),
+            let data = try? JSONSerialization.data(withJSONObject: object),
+            let state = try? JSONDecoder().decode(GraphSessionState.self, from: data),
+            state.schemaVersion == GraphSessionState.currentSchemaVersion
+        else {
+            return nil
+        }
+        return state.normalized
+    }
+
     static func bundledResourceString(name: String, extension fileExtension: String, subdirectory: String) -> String? {
         guard
             let url = Bundle.main.url(forResource: name, withExtension: fileExtension, subdirectory: subdirectory),
@@ -394,10 +797,6 @@ private extension GraphWebView {
           style.id = 'brainbar-graph-theme';
           style.textContent = \(jsStringLiteral(css));
           (document.head || root).appendChild(style);
-          window.setTimeout(() => {
-            root.classList.remove('brainbar-graph-preparing');
-            root.classList.add('brainbar-graph-ready');
-          }, 1500);
         })();
         """
     }

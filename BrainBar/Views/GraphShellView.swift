@@ -1,6 +1,29 @@
 import AppKit
 import SwiftUI
 
+enum GraphRendererChoice: Equatable, Sendable {
+    case twoD
+    case threeD
+}
+
+func graphRendererChoice(
+    isFocus: Bool,
+    graphJSONExists: Bool,
+    graphHTMLExists: Bool,
+    requestedMode: GraphViewMode,
+    experimental3DEnabled: Bool
+) -> GraphRendererChoice {
+    guard
+        isFocus,
+        graphJSONExists,
+        (requestedMode == .threeD || !graphHTMLExists),
+        experimental3DEnabled
+    else {
+        return .twoD
+    }
+    return .threeD
+}
+
 struct GraphShellView: View {
     enum Mode {
         case popover
@@ -61,6 +84,9 @@ struct GraphShellView: View {
         }
         .background(BrainBarTheme.frame)
         .ignoresSafeArea(.container, edges: mode.isFocus ? .top : [])
+        .task {
+            await model.loadGraphChangeRadar()
+        }
     }
 
     private var header: some View {
@@ -146,38 +172,87 @@ struct GraphShellView: View {
 
     @ViewBuilder
     private func activeGraphView(graphURL: URL, readAccessURL: URL) -> some View {
-        if mode.isFocus,
-           model.status.graphJSONExists,
-           (model.graphViewMode == .threeD || !model.status.graphHtmlExists),
-           usesExperimental3DRenderer {
-            Graph3DWebView(
-                readAccessURL: readAccessURL,
-                reloadToken: model.graphReloadToken,
-                sourceLens: model.graphSourceLens,
-                resetCameraToken: model.graph3DResetToken,
-                viewportCommand: model.graphViewportCommand,
-                agentActivitySnapshot: model.agentActivitySnapshot,
-                onDiagnostic: model.reportGraphRendererIssue,
-                onOpenNode: model.openGraphNode
-            )
-        } else {
-            ZStack(alignment: .topLeading) {
-                GraphWebView(
+        let renderer = graphRendererChoice(
+            isFocus: mode.isFocus,
+            graphJSONExists: model.status.graphJSONExists,
+            graphHTMLExists: model.status.graphHtmlExists,
+            requestedMode: model.graphViewMode,
+            experimental3DEnabled: usesExperimental3DRenderer
+        )
+        let rendererKind: GraphRendererKind = renderer == .threeD ? .threeD : .twoD
+        let surface: GraphSurfaceKind = mode.isFocus ? .focus : .popover
+        let loadState = model.graphLoadState(for: rendererKind, surface: surface)
+        ZStack {
+            if renderer == .threeD {
+                Graph3DWebView(
+                    readAccessURL: readAccessURL,
+                    graphDataStore: model.graphDataStore,
+                    reloadToken: model.graphReloadToken,
+                    sourceLens: model.graphSourceLens,
+                    sessionState: model.graphSessionState,
+                    resetCameraToken: model.graph3DResetToken,
+                    viewportCommand: model.graphViewportCommand,
+                    cancellationRequest: model.graphLoadCancellationRequest(
+                        for: .threeD,
+                        surface: surface
+                    ),
+                    agentActivitySnapshot: model.agentActivitySnapshot,
+                    workflowSelectionID: model.selectedAgentActivityWorkflowID,
+                    onDiagnostic: model.reportGraphRendererIssue,
+                    onLoadEvent: { event, attempt in
+                        model.handleGraphRendererLoadEvent(
+                            event,
+                            renderer: .threeD,
+                            surface: surface,
+                            attempt: attempt
+                        )
+                    },
+                    onOpenNode: model.openGraphNode,
+                    onSessionState: model.updateGraphSessionState
+                )
+            } else {
+                ZStack(alignment: .topLeading) {
+                    GraphWebView(
                     fileURL: graphURL,
                     readAccessURL: readAccessURL,
                     reloadToken: model.graphReloadToken,
                     sourceLens: model.graphSourceLens,
                     reviewQueueStatus: model.reviewQueueStatus,
                     agentActivitySnapshot: model.agentActivitySnapshot,
+                    workflowSelectionID: model.selectedAgentActivityWorkflowID,
+                    sessionState: model.graphSessionState,
                     viewportCommand: model.graphViewportCommand,
-                    onOpenNode: model.openGraphNode
-                )
+                    cancellationRequest: model.graphLoadCancellationRequest(
+                        for: .twoD,
+                        surface: surface
+                    ),
+                    onLoadEvent: { event, attempt in
+                        model.handleGraphRendererLoadEvent(
+                            event,
+                            renderer: .twoD,
+                            surface: surface,
+                            attempt: attempt,
+                            threeDRendererAvailable: usesExperimental3DRenderer
+                        )
+                    },
+                    onOpenNode: model.openGraphNode,
+                    onSessionState: model.updateGraphSessionState
+                    )
 
-                if mode.isFocus, model.graphViewMode == .threeD {
-                    ThreeDFallbackBadge()
-                        .padding(12)
+                    if mode.isFocus, model.graphViewMode == .threeD {
+                        ThreeDFallbackBadge()
+                            .padding(12)
+                    }
                 }
             }
+
+            GraphLoadStateOverlay(
+                state: loadState,
+                cancel: {
+                    model.cancelGraphLoad(renderer: rendererKind, surface: surface)
+                },
+                retry: model.retryGraphLoad
+            )
         }
     }
 
@@ -329,6 +404,12 @@ private struct GraphChromeBar: View {
             }
 
             HStack(spacing: 4) {
+                if mode.isFocus, model.status.graphOutputExists {
+                    SavedGraphViewsMenu(model: model)
+                }
+
+                WorkflowPopoverButton(model: model)
+
                 GraphActionMenu(model: model)
 
                 ChromeIconButton(systemImage: "gearshape", help: "Settings") {
@@ -363,10 +444,268 @@ private struct GraphChromeBar: View {
     }
 }
 
+private struct WorkflowPopoverButton: View {
+    let model: AppModel
+    @State private var isPresented = false
+
+    var body: some View {
+        Button {
+            isPresented.toggle()
+        } label: {
+            Image(systemName: "point.3.connected.trianglepath.dotted")
+                .frame(width: 28, height: 28)
+                .contentShape(.rect(cornerRadius: 8))
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(model.selectedAgentActivityWorkflowID == nil ? BrainBarTheme.secondaryText : BrainBarTheme.accent)
+        .background(BrainBarTheme.panel.opacity(0.001), in: .rect(cornerRadius: 8))
+        .help("Workflow history")
+        .accessibilityLabel("Workflow history")
+        .popover(isPresented: $isPresented, arrowEdge: .top) {
+            WorkflowPopover(model: model)
+                .frame(width: 360)
+        }
+    }
+}
+
+private struct WorkflowPopover: View {
+    let model: AppModel
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .firstTextBaseline, spacing: 10) {
+                Text("Workflows")
+                    .font(.headline.weight(.semibold))
+                    .foregroundStyle(BrainBarTheme.primaryText)
+                Spacer(minLength: 0)
+                Text("\(workflows.count)")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(BrainBarTheme.accent)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(BrainBarTheme.accent.opacity(0.12), in: .capsule)
+            }
+
+            Text("Explicit workflow or session IDs only. Selecting one adds a graph highlight without changing your current graph view.")
+                .font(.caption)
+                .foregroundStyle(BrainBarTheme.secondaryText)
+
+            if let selectedWorkflow {
+                selectedWorkflowDetail(selectedWorkflow)
+                Button("Clear selection") {
+                    model.selectAgentActivityWorkflow(nil)
+                }
+                .controlSize(.small)
+            }
+
+            if workflows.isEmpty {
+                Text("No explicit workflows recorded yet.")
+                    .font(.caption)
+                    .foregroundStyle(BrainBarTheme.secondaryText)
+                    .padding(.vertical, 4)
+            } else {
+                Divider().overlay(BrainBarTheme.borderSubtle)
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 8) {
+                        ForEach(workflows) { workflow in
+                            workflowRow(workflow)
+                        }
+                    }
+                }
+                .frame(maxHeight: selectedWorkflow == nil ? 300 : 160)
+            }
+        }
+        .padding(14)
+        .background(BrainBarTheme.chrome)
+    }
+
+    private var workflows: [AgentActivityWorkflow] {
+        model.agentActivitySnapshot.workflows.sorted {
+            if $0.lastEventAt != $1.lastEventAt { return $0.lastEventAt > $1.lastEventAt }
+            return $0.id < $1.id
+        }
+    }
+
+    private var selectedWorkflow: AgentActivityWorkflow? {
+        workflows.first { $0.id == model.selectedAgentActivityWorkflowID }
+    }
+
+    private func workflowRow(_ workflow: AgentActivityWorkflow) -> some View {
+        Button {
+            model.selectAgentActivityWorkflow(workflow)
+        } label: {
+            HStack(alignment: .top, spacing: 9) {
+                Circle()
+                    .fill(workflow.id == model.selectedAgentActivityWorkflowID ? BrainBarTheme.accent : BrainBarTheme.secondaryText.opacity(0.55))
+                    .frame(width: 6, height: 6)
+                    .padding(.top, 5)
+                VStack(alignment: .leading, spacing: 3) {
+                    HStack(spacing: 6) {
+                        Text(workflowTitle(workflow))
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(BrainBarTheme.primaryText)
+                            .lineLimit(1)
+                        Text(workflowStatus(workflow))
+                            .font(.caption2.weight(.semibold))
+                            .foregroundStyle(BrainBarTheme.secondaryText)
+                            .lineLimit(1)
+                    }
+                    Text("\(workflowAgents(workflow)) · \(workflow.lastEventAt.formatted(date: .abbreviated, time: .shortened))")
+                        .font(.caption2)
+                        .foregroundStyle(BrainBarTheme.secondaryText)
+                        .lineLimit(1)
+                    Text(workflow.id)
+                        .font(.caption2.monospaced())
+                        .foregroundStyle(BrainBarTheme.mutedText)
+                        .lineLimit(1)
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(9)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(workflow.id == model.selectedAgentActivityWorkflowID ? BrainBarTheme.accent.opacity(0.12) : BrainBarTheme.panel, in: .rect(cornerRadius: 8))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Select workflow \(workflowTitle(workflow))")
+    }
+
+    @ViewBuilder
+    private func selectedWorkflowDetail(_ workflow: AgentActivityWorkflow) -> some View {
+        VStack(alignment: .leading, spacing: 7) {
+            Text("Selected: \(workflowTitle(workflow))")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(BrainBarTheme.primaryText)
+            Text("\(workflowStatus(workflow)) · \(workflowAgents(workflow)) · \(workflow.firstEventAt.formatted(date: .abbreviated, time: .shortened)) – \(workflow.lastEventAt.formatted(date: .abbreviated, time: .shortened))")
+                .font(.caption2)
+                .foregroundStyle(BrainBarTheme.secondaryText)
+            pathList("Source", paths: workflow.sourcePaths)
+            pathList("Output", paths: workflow.outputPaths)
+            pathList("Touched", paths: workflow.touchedPaths)
+            if pendingRefreshCount(for: workflow) > 0 {
+                Label("Pending refresh · \(pendingRefreshCount(for: workflow)) path\(pendingRefreshCount(for: workflow) == 1 ? "" : "s")", systemImage: "arrow.triangle.2.circlepath")
+                    .font(.caption2)
+                    .foregroundStyle(BrainBarTheme.warning)
+            }
+            if !workflow.trail.isEmpty {
+                Text("Trail")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(BrainBarTheme.secondaryText)
+                ForEach(workflow.trail.sorted { $0.timestamp == $1.timestamp ? $0.id < $1.id : $0.timestamp < $1.timestamp }.prefix(5)) { event in
+                    Text("\(pathRoleLabel(event.pathRole)) · \(event.agent) · \(event.timestamp.formatted(date: .omitted, time: .shortened))")
+                        .font(.caption2)
+                        .foregroundStyle(BrainBarTheme.mutedText)
+                        .lineLimit(1)
+                }
+            }
+        }
+        .padding(10)
+        .background(BrainBarTheme.panel.opacity(0.72), in: .rect(cornerRadius: 8))
+    }
+
+    @ViewBuilder
+    private func pathList(_ title: String, paths: [String]) -> some View {
+        if !paths.isEmpty {
+            Text("\(title): \(paths.prefix(2).joined(separator: ", "))\(paths.count > 2 ? " +\(paths.count - 2)" : "")")
+                .font(.caption2)
+                .foregroundStyle(BrainBarTheme.mutedText)
+                .lineLimit(1)
+        }
+    }
+
+    private func workflowTitle(_ workflow: AgentActivityWorkflow) -> String {
+        nonempty(workflow.title) ?? nonempty(workflow.workflowId) ?? nonempty(workflow.sessionId) ?? workflow.id
+    }
+
+    private func workflowStatus(_ workflow: AgentActivityWorkflow) -> String {
+        nonempty(workflow.status) ?? "Unspecified"
+    }
+
+    private func workflowAgents(_ workflow: AgentActivityWorkflow) -> String {
+        let agents = Array(Set(workflow.trail.map(\.agent))).sorted()
+        return agents.isEmpty ? "No agent" : agents.joined(separator: ", ")
+    }
+
+    private func pendingRefreshCount(for workflow: AgentActivityWorkflow) -> Int {
+        workflow.pendingPaths.count
+    }
+
+    private func pathRoleLabel(_ role: AgentActivityPathRole?) -> String {
+        switch role {
+        case .source: return "Source"
+        case .output: return "Output"
+        case nil: return "Touched"
+        }
+    }
+
+    private func nonempty(_ value: String?) -> String? {
+        guard let value else { return nil }
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
+}
+
+private struct SavedGraphViewsMenu: View {
+    let model: AppModel
+    @State private var isNamingView = false
+    @State private var viewName = ""
+
+    var body: some View {
+        Menu {
+            Button("Save Current View", systemImage: "plus") {
+                viewName = "View \(model.savedGraphViews.count + 1)"
+                isNamingView = true
+            }
+
+            Divider()
+
+            if model.savedGraphViews.isEmpty {
+                Text("No saved views")
+            } else {
+                ForEach(model.savedGraphViews) { view in
+                    Button(view.name) {
+                        model.applySavedGraphView(view)
+                    }
+                }
+
+                Menu("Delete Saved View", systemImage: "trash") {
+                    ForEach(model.savedGraphViews) { view in
+                        Button(view.name, role: .destructive) {
+                            Task { await model.deleteSavedGraphView(view) }
+                        }
+                    }
+                }
+            }
+        } label: {
+            Image(systemName: "bookmark")
+                .frame(width: 28, height: 25)
+                .contentShape(.rect)
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .help("Save or restore this graph context")
+        .accessibilityLabel("Saved graph views")
+        .alert("Save Graph View", isPresented: $isNamingView) {
+            TextField("View name", text: $viewName)
+            Button("Cancel", role: .cancel) {}
+            Button("Save") {
+                Task { await model.saveCurrentGraphView(named: viewName) }
+            }
+            .disabled(viewName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+        } message: {
+            Text("Stores graph references and display state locally. Note contents are never copied.")
+        }
+        .task {
+            await model.loadSavedGraphViews()
+        }
+    }
+}
+
 private struct GraphActionMenu: View {
     let model: AppModel
     @Environment(\.openWindow) private var openWindow
     @State private var isReviewQueuePopoverPresented = false
+    @State private var isChangeInboxPopoverPresented = false
 
     var body: some View {
         Menu {
@@ -398,6 +737,14 @@ private struct GraphActionMenu: View {
                     } label: {
                         Label("Open Externally", systemImage: "safari")
                     }
+                }
+            }
+
+            Section("Change Radar") {
+                Button {
+                    isChangeInboxPopoverPresented = true
+                } label: {
+                    Label("Change Inbox (\(model.graphChangeRadarInbox.count))", systemImage: "dot.radiowaves.left.and.right")
                 }
             }
 
@@ -498,7 +845,7 @@ private struct GraphActionMenu: View {
                     .frame(width: 28, height: 28)
                     .contentShape(.rect(cornerRadius: 8))
 
-                if let badgeColor = reviewQueueBadgeColor {
+                if let badgeColor = reviewQueueBadgeColor ?? changeRadarBadgeColor {
                     Circle()
                         .fill(badgeColor)
                         .frame(width: 6, height: 6)
@@ -519,6 +866,10 @@ private struct GraphActionMenu: View {
             ReviewQueuePopover(model: model, onConfigure: openSettings)
                 .frame(width: 360)
         }
+        .popover(isPresented: $isChangeInboxPopoverPresented, arrowEdge: .top) {
+            ChangeRadarPopover(model: model)
+                .frame(width: 360)
+        }
     }
 
     private var reviewQueueBadgeColor: Color? {
@@ -534,6 +885,13 @@ private struct GraphActionMenu: View {
             return BrainBarTheme.warning
         }
         return nil
+    }
+
+    private var changeRadarBadgeColor: Color? {
+        guard !model.graphChangeRadarInbox.isEmpty || model.graphChangeRadarRetentionOverflow else {
+            return nil
+        }
+        return model.graphChangeRadarRetentionOverflow ? BrainBarTheme.warning : BrainBarTheme.accent
     }
 
     private func openSettings() {
@@ -881,6 +1239,95 @@ private struct SystemStatusMenu: View {
     }
 }
 
+private struct ChangeRadarPopover: View {
+    let model: AppModel
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .firstTextBaseline, spacing: 10) {
+                Text("Change Inbox")
+                    .font(.headline.weight(.semibold))
+                    .foregroundStyle(BrainBarTheme.primaryText)
+                Spacer(minLength: 0)
+                Text("\(model.graphChangeRadarInbox.count)")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(BrainBarTheme.accent)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(BrainBarTheme.accent.opacity(0.12), in: .capsule)
+            }
+
+            Text(model.graphChangeRadarSummary)
+                .font(.caption)
+                .foregroundStyle(BrainBarTheme.secondaryText)
+
+            if model.graphChangeRadarRetentionOverflow {
+                Label("The newest snapshot exceeds the local 64 MiB retention limit; only it is retained.", systemImage: "exclamationmark.triangle")
+                    .font(.caption)
+                    .foregroundStyle(BrainBarTheme.warning)
+            }
+
+            if let emptyStateMessage = model.graphChangeRadarEmptyStateMessage {
+                Text(emptyStateMessage)
+                    .font(.caption)
+                    .foregroundStyle(BrainBarTheme.secondaryText)
+                    .padding(.vertical, 4)
+            } else {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 10) {
+                        ForEach(model.graphChangeRadarInbox) { item in
+                            radarItem(item)
+                        }
+                    }
+                }
+                .frame(maxHeight: 300)
+            }
+
+            Divider().overlay(BrainBarTheme.borderSubtle)
+            Button("Clear History", role: .destructive) {
+                Task { await model.clearGraphChangeRadar() }
+            }
+            .controlSize(.small)
+            .help("Deletes only the local Change Radar snapshot sidecar, not Agent Activity history.")
+        }
+        .padding(14)
+        .background(BrainBarTheme.chrome)
+    }
+
+    @ViewBuilder
+    private func radarItem(_ item: GraphChangeRadarInboxItem) -> some View {
+        VStack(alignment: .leading, spacing: 5) {
+            Text(item.title)
+                .font(.callout.weight(.medium))
+                .foregroundStyle(BrainBarTheme.primaryText)
+            Text(item.detail)
+                .font(.caption)
+                .foregroundStyle(BrainBarTheme.secondaryText)
+                .lineLimit(2)
+
+            if model.expandedGraphChangeRadarInboxItemIDs.contains(item.id) {
+                Text(item.compareEvidence)
+                    .font(.caption.monospaced())
+                    .foregroundStyle(BrainBarTheme.mutedText)
+                    .textSelection(.enabled)
+            }
+
+            HStack(spacing: 8) {
+                if item.nodeID != nil {
+                    Button("Reveal") { model.revealGraphChangeRadarInboxItem(item) }
+                    Button("Focus") { model.focusGraphChangeRadarInboxItem(item) }
+                }
+                Button("Compare") { model.compareGraphChangeRadarInboxItem(item) }
+                Button("Dismiss") { model.dismissGraphChangeRadarInboxItem(item) }
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.mini)
+        }
+        .padding(9)
+        .background(BrainBarTheme.panel, in: .rect(cornerRadius: 8))
+    }
+}
+
 private struct GraphSourceLensMenu: View {
     let selectedLens: GraphSourceLens
     let onSelect: (GraphSourceLens) -> Void
@@ -1025,6 +1472,171 @@ private struct ThreeDFallbackBadge: View {
                     .stroke(BrainBarTheme.border, lineWidth: 1)
             }
             .help("Using the stable graph renderer while the 3D renderer is paused.")
+    }
+}
+
+private struct GraphLoadStateOverlay: View {
+    let state: GraphLoadState
+    let cancel: () -> Void
+    let retry: () -> Void
+
+    var body: some View {
+        switch state {
+        case .loading(_, let previousReadyAttempt):
+            if previousReadyAttempt == nil {
+                GraphLoadCard(
+                    title: "Loading graph",
+                    detail: "Preparing your local graph…",
+                    systemImage: "arrow.triangle.2.circlepath",
+                    cancel: cancel
+                )
+            } else {
+                GraphLoadBanner(text: "Reloading graph…", buttonTitle: "Cancel", action: cancel)
+            }
+        case .stale:
+            GraphLoadBanner(text: "New graph output available — reloading…")
+        case .failed(_, let reason, _):
+            GraphLoadFailureCard(reason: reason, retry: retry)
+        case .cancelled(_, let previousReadyAttempt):
+            if previousReadyAttempt == nil {
+                GraphLoadCancelledCard(retry: retry)
+            } else {
+                GraphLoadBanner(
+                    text: "Reload stopped — showing the previous graph.",
+                    buttonTitle: "Retry",
+                    action: retry
+                )
+            }
+        case .idle, .ready:
+            EmptyView()
+        }
+    }
+}
+
+private struct GraphLoadCard: View {
+    let title: String
+    let detail: String
+    let systemImage: String
+    let cancel: () -> Void
+
+    var body: some View {
+        VStack(spacing: 10) {
+            ProgressView()
+                .controlSize(.small)
+            Label(title, systemImage: systemImage)
+                .font(.headline)
+            Text(detail)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Button("Cancel", action: cancel)
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+        }
+        .padding(24)
+        .background(BrainBarTheme.panel.opacity(0.94), in: .rect(cornerRadius: 12))
+        .overlay {
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(BrainBarTheme.border, lineWidth: 1)
+        }
+    }
+}
+
+private struct GraphLoadBanner: View {
+    let text: String
+    var buttonTitle: String?
+    var action: (() -> Void)?
+
+    var body: some View {
+        VStack {
+            HStack(spacing: 8) {
+                Label(text, systemImage: "arrow.triangle.2.circlepath")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(BrainBarTheme.secondaryText)
+                if let buttonTitle, let action {
+                    Button(buttonTitle, action: action)
+                        .buttonStyle(.borderless)
+                        .controlSize(.small)
+                }
+            }
+            .padding(.horizontal, 11)
+            .padding(.vertical, 7)
+            .background(BrainBarTheme.elevated.opacity(0.92), in: Capsule())
+            .overlay {
+                Capsule()
+                    .stroke(BrainBarTheme.border, lineWidth: 1)
+            }
+            Spacer()
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .allowsHitTesting(action != nil)
+    }
+}
+
+private struct GraphLoadCancelledCard: View {
+    let retry: () -> Void
+
+    var body: some View {
+        VStack(spacing: 12) {
+            Image(systemName: "pause.circle.fill")
+                .font(.title2)
+                .foregroundStyle(BrainBarTheme.secondaryText)
+            Text("Graph loading stopped")
+                .font(.headline)
+            Text("Retry when you’re ready.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Button("Retry", action: retry)
+                .buttonStyle(.borderedProminent)
+                .controlSize(.small)
+        }
+        .padding(24)
+        .background(BrainBarTheme.panel.opacity(0.96), in: .rect(cornerRadius: 12))
+        .overlay {
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(BrainBarTheme.border, lineWidth: 1)
+        }
+    }
+}
+
+private struct GraphLoadFailureCard: View {
+    let reason: GraphLoadFailure
+    let retry: () -> Void
+
+    var body: some View {
+        VStack(spacing: 12) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.title2)
+                .foregroundStyle(BrainBarTheme.error)
+            Text("Graph couldn’t load")
+                .font(.headline)
+            Text(detail)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+            Button("Retry", action: retry)
+                .buttonStyle(.borderedProminent)
+                .controlSize(.small)
+        }
+        .padding(24)
+        .background(BrainBarTheme.panel.opacity(0.96), in: .rect(cornerRadius: 12))
+        .overlay {
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(BrainBarTheme.border, lineWidth: 1)
+        }
+    }
+
+    private var detail: String {
+        switch reason {
+        case .navigationFailed:
+            "BrainBar couldn’t open the local graph page."
+        case .rendererFailed:
+            "BrainBar couldn’t prepare the graph renderer."
+        case .twoDRuntimeUnavailable:
+            "The generated 2D page couldn’t provide its Vis graph runtime. Regenerate the Graphify page or use the 3D graph when available."
+        case .validation:
+            "BrainBar couldn’t validate the local graph data."
+        }
     }
 }
 

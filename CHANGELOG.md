@@ -4,7 +4,18 @@ All notable changes to BrainBar are documented here.
 
 ## Unreleased
 
-- Added Agent Workflows product documentation for the next layer beyond Agent Activity, aligning Hermes Agent's documented `SOUL.md`, memory, skills, toolsets, terminal backends, gateways, scheduled tasks, and subagents with a phased, read-only strategy.
+## 0.10.0 - 2026-08-08
+
+- Added an off-main, digest-bound graph data pipeline, cancellable loading states, retry recovery, and exact node/edge identity checks for large graphs.
+- Moved deterministic 3D layout work into a Web Worker, replaced pairwise separation with bounded spatial work, and added a privacy-safe layout cache for repeated graph and Source Lens loads.
+- Added Setup Doctor diagnostics, global filtered search, versioned 2D/3D session continuity, and saved local graph views.
+- Added Change Radar with local rolling snapshots, deterministic diffs, a compact Change Inbox, bounded retention, and no vault writes.
+- Replaced periodic Agent Activity vault scans with event-driven watching and incremental JSONL tailing; added exclusions, retention controls, metadata preview, and clear-history actions.
+- Added explicit-ID Agent Workflows with versioned metadata, deterministic source/output/touched trails, pending-refresh paths, and additive graph highlighting.
+- Added a shared Guided Maintenance evidence engine, unified 2D/3D inspectors, versioned Graph Check rules, and copy-only proposals that never mutate Markdown.
+- Restored offline 2D Workbench rendering when Graphify provides `graph.html` by bundling pinned Vis Network 9.1.6, blocking the matching remote script, and loading the verified local runtime instead.
+- Added pull-request CI, deterministic large-graph fixtures, renderer performance measurements, process deadlock regressions, and public-safety gates.
+- Added Agent Workflows product documentation, including the explicit metadata-only boundary for future Hermes integration.
 
 ## 0.9.81 - 2026-06-16
 
