@@ -17,6 +17,7 @@ const graph3dSearch = await import(pathToFileURL(join(root, 'BrainBar/Resources/
 const graph3dStory = await import(pathToFileURL(join(root, 'BrainBar/Resources/Graph3D/graph3d-story-utils.mjs')));
 const graph3dLayout = await import(pathToFileURL(join(root, 'BrainBar/Resources/Graph3D/graph3d-layout-utils.mjs')));
 const graph3dLayoutCache = await import(pathToFileURL(join(root, 'BrainBar/Resources/Graph3D/graph3d-layout-cache.mjs')));
+const graph3dPresentation = await import(pathToFileURL(join(root, 'BrainBar/Resources/Graph3D/graph3d-presentation-utils.mjs')));
 const fixture = JSON.parse(readFileSync(join(root, 'BrainBarTests/Fixtures/graph-runtime-fixture.json'), 'utf8'));
 const graph3dSource = readFileSync(join(root, 'BrainBar/Resources/Graph3D/graph3d.js'), 'utf8');
 const graph2dSource = readFileSync(join(root, 'BrainBar/Resources/Graph2D/brainbar-graph-runtime.js'), 'utf8');
@@ -221,8 +222,9 @@ const validLayoutCacheRecord = graph3dLayoutCache.layoutCacheRecord({
   nodeCount: 2,
   coordinates: layoutCacheCoordinates.buffer
 });
-assert.equal(graph3dLayoutCache.layoutCacheSchemaVersion, 1);
-assert.equal(validLayoutCacheRecord.key, `1:${layoutCacheDigest}:all`);
+assert.equal(graph3dLayout.graph3dLayoutSchemaVersion, 2);
+assert.equal(graph3dLayoutCache.layoutCacheSchemaVersion, 2);
+assert.equal(validLayoutCacheRecord.key, `2:${layoutCacheDigest}:all`);
 assert.equal(validLayoutCacheRecord.lens, 'all');
 assert.deepEqual(
   [...graph3dLayoutCache.validateLayoutCacheRecord(validLayoutCacheRecord, {
@@ -980,7 +982,15 @@ assert.match(graph3dSource, /event: 'graphReady',[\s\S]*generation: layoutContex
 assert.match(graph3dSource, /if \(isCurrentLayoutContext\(context\)\) \{\s*state\.layoutState = 'failed';\s*failLayout\(\);/);
 assert.match(graph3dWorkerSource, /self\.postMessage\(\{ type: 'ready' \}\)/);
 assert.match(graph3dWorkerSource, /positions: layout\.positions\.buffer/);
-assert.match(graph3dWorkerSource, /\[layout\.positions\.buffer\]/);
+assert.match(graph3dWorkerSource, /\[\s*layout\.positions\.buffer,[\s\S]*layout\.structuralRanks\.buffer\s*\]/);
+assert.match(graph3dWorkerSource, /layoutSchemaVersion: graph3dLayoutSchemaVersion/);
+assert.match(graph3dWorkerSource, /communityIndexByNode: layout\.communityIndexByNode\.buffer/);
+assert.match(graph3dWorkerSource, /communityCenters: layout\.communityCenters\.buffer/);
+assert.match(graph3dWorkerSource, /communityBounds: layout\.communityBounds\.buffer/);
+assert.match(graph3dWorkerSource, /structuralRanks: layout\.structuralRanks\.buffer/);
+assert.match(graph3dWorkerSource, /communityCount: layout\.communityCount/);
+assert.equal(graph3dPresentation.adaptiveDetailLevel(2500), 'balanced');
+assert.equal(graph3dPresentation.adaptiveDetailLevel(2501), 'overview');
 assert.match(graph3dSource, /function clearInteractiveModes[\s\S]*clearFocusOrbit\(false\)[\s\S]*clearPathMode\(false\)[\s\S]*clearGraphStory\(false\)/);
 assert.match(graph3dSource, /Compare paths/);
 assert.match(graph3dSource, /No route found/);
@@ -1066,6 +1076,7 @@ assert.ok(resetAll.nodeUpdates.every((update) => update.hidden === false));
   'BrainBar/Resources/Graph3D/graph3d-layout-utils.mjs',
   'BrainBar/Resources/Graph3D/graph3d-layout-cache.mjs',
   'BrainBar/Resources/Graph3D/graph3d-layout-worker.mjs',
+  'BrainBar/Resources/Graph3D/graph3d-presentation-utils.mjs',
   'BrainBar/Resources/Graph3D/graph3d-living-utils.mjs',
   'BrainBar/Resources/Graph3D/graph3d-path-utils.mjs',
   'BrainBar/Resources/Graph3D/graph3d-search-utils.mjs',
