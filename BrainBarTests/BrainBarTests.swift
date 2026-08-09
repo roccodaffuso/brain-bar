@@ -5571,23 +5571,21 @@ final class BrainBarTests: XCTestCase {
 
     @MainActor
     private func writeVisualCaptureSnapshot(of webView: WKWebView, to url: URL) async throws {
-        let image: NSImage = try await withCheckedThrowingContinuation { continuation in
+        let pngData: Data = try await withCheckedThrowingContinuation { continuation in
             webView.takeSnapshot(with: nil) { image, error in
                 if let error {
                     continuation.resume(throwing: error)
-                } else if let image {
-                    continuation.resume(returning: image)
+                } else if
+                    let image,
+                    let tiffData = image.tiffRepresentation,
+                    let bitmap = NSBitmapImageRep(data: tiffData),
+                    let pngData = bitmap.representation(using: .png, properties: [:])
+                {
+                    continuation.resume(returning: pngData)
                 } else {
-                    continuation.resume(throwing: BrainBarError.processFailed("Graph3D visual capture returned no image."))
+                    continuation.resume(throwing: BrainBarError.processFailed("Graph3D visual capture could not encode PNG."))
                 }
             }
-        }
-        guard
-            let tiffData = image.tiffRepresentation,
-            let bitmap = NSBitmapImageRep(data: tiffData),
-            let pngData = bitmap.representation(using: .png, properties: [:])
-        else {
-            throw BrainBarError.processFailed("Graph3D visual capture could not encode PNG.")
         }
         try pngData.write(to: url, options: .atomic)
     }
