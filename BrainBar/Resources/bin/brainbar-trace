@@ -6,7 +6,7 @@ PATH_VALUE="${2:-}"
 shift 2 2>/dev/null || true
 
 if [ -z "$ACTION" ] || [ -z "$PATH_VALUE" ]; then
-  echo "Usage: brainbar-trace <action> <path> [--agent name] [--reason text] [--session-id id] [--project name] [--source source] [--node-id id] [--status status]" >&2
+  echo "Usage: brainbar-trace <action> <path> [--agent name] [--reason text] [--session-id id] [--project name] [--source source] [--node-id id] [--status status] [--workflow-id id] [--workflow-title title] [--path-role source|output]" >&2
   exit 64
 fi
 
@@ -41,6 +41,9 @@ mapping = {
     "--source": "source",
     "--node-id": "node_id",
     "--status": "status",
+    "--workflow-id": "workflow_id",
+    "--workflow-title": "workflow_title",
+    "--path-role": "path_role",
 }
 
 def explicit_agent(arguments):
@@ -89,7 +92,7 @@ def inferred_agent():
     return "codex"
 
 fields = {
-    "version": 1,
+    "version": 2,
     "agent": explicit_agent(args) or inferred_agent(),
     "action": action,
     "path": path_value,
@@ -101,7 +104,11 @@ while index < len(args):
     if key not in mapping or index + 1 >= len(args):
         print(f"Unsupported argument: {key}", file=sys.stderr)
         sys.exit(64)
-    fields[mapping[key]] = args[index + 1]
+    value = args[index + 1]
+    if key == "--path-role" and value not in {"source", "output"}:
+        print("--path-role must be source or output", file=sys.stderr)
+        sys.exit(64)
+    fields[mapping[key]] = value
     index += 2
 
 log_path = pathlib.Path.home() / "Library" / "Application Support" / "BrainBar" / "agent-events.jsonl"

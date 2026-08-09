@@ -1,5 +1,9 @@
 # Experimental 3D Focus Graph
 
+> Historical design record. BrainBar v0.10 promotes the verified 3D Explorer
+> to the primary graph surface; the current contract and acceptance evidence
+> live in [graph3d-visual-spatial-redesign.md](graph3d-visual-spatial-redesign.md).
+
 BrainBar v0.4 explores a custom `3D Beta` graph mode for the Focus Window. The stable product path remains the embedded 2D Graphify graph; the 3D view is a separate experiment for controlled spatial exploration and visual research.
 
 Current status: the `3D Beta` control is visible in the Focus Window and uses the experimental renderer. Real-vault QA showed that graph data, layout, camera fitting, and diagnostics could succeed while a pure WebGL canvas still presented a blank paint surface in WebKit. The renderer now uses Three.js for camera/projection/picking and a premium Canvas 2D visual layer for the actual visible graph, so the user is not dependent on WebKit's WebGL compositing path or per-frame SVG DOM churn.

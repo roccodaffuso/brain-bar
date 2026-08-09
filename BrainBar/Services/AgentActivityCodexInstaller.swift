@@ -131,6 +131,8 @@ struct AgentActivityCodexInstaller {
         `${HOME}/Applications/BrainBar.app/Contents/Resources/bin/brainbar-trace write "path/to/file.md" --reason "updated durable note"`
         `${HOME}/Applications/BrainBar.app/Contents/Resources/bin/brainbar-trace focus "path/to/file.md" --reason "active working file"`
 
+        Schema v2 optionally accepts `--workflow-id`, `--workflow-title`, and `--path-role source|output`. Use only declared values; omit `--path-role` for a touched path.
+
         Trace metadata only. Never trace note contents, prompts, raw transcripts, stdout/stderr, secrets, credentials, build artifacts, dependency caches, temporary files, or files under `.git`.
         \(Self.agentsEndMarker)
 

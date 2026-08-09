@@ -1,0 +1,46 @@
+{
+  "cold": {
+    "appProcessResidentDeltaAfterTransportPreparationBytes": {"cvPercent": 0, "p50": 0, "p95": 0, "samples": [0]},
+    "appProcessResidentMaxSampleBytes": {"cvPercent": 0, "p50": 448757760, "p95": 448757760, "samples": [448757760]},
+    "graphTransportPreparationMs": {"cvPercent": 0, "p50": 0.12993812561035156, "p95": 0.12993812561035156, "samples": [0.12993812561035156]},
+    "threeDLayoutCallReturnMs": {"cvPercent": 0, "p50": 74, "p95": 74, "samples": [74]},
+    "threeDLayoutPreparationMs": {"cvPercent": 0, "p50": 2, "p95": 2, "samples": [2]},
+    "threeDLayoutZeroDelayTimerProbeMs": {"cvPercent": 0, "p50": 77.00000000000003, "p95": 77.00000000000003, "samples": [77.00000000000003]},
+    "threeDLensToSettledMs": {"cvPercent": 0, "p50": 4259.97793674469, "p95": 4259.97793674469, "samples": [4259.97793674469]},
+    "threeDLoadToSettledPaintMs": {"cvPercent": 0, "p50": 9560.131072998047, "p95": 9560.131072998047, "samples": [9560.131072998047]},
+    "threeDSearchToSettledMs": {"cvPercent": 0, "p50": 44.58606243133545, "p95": 44.58606243133545, "samples": [44.58606243133545]},
+    "twoDRuntimeLensToDiagnosticsMs": {"cvPercent": 0, "p50": 6717.98300743103, "p95": 6717.98300743103, "samples": [6717.98300743103]},
+    "twoDRuntimeLoadToDiagnosticsMs": {"cvPercent": 0, "p50": 706.9710493087769, "p95": 706.9710493087769, "samples": [706.9710493087769]},
+    "twoDRuntimeSearchToDiagnosticsMs": {"cvPercent": 0, "p50": 23.7429141998291, "p95": 23.7429141998291, "samples": [23.7429141998291]}
+  },
+  "environment": {
+    "operatingSystemVersion": "Version 26.5.2 (Build 25F84)",
+    "physicalMemoryBytes": 17179869184,
+    "processIdentifier": 27667
+  },
+  "fixture": {"edgeCount": 59512, "name": "25k-stress", "nodeCount": 25000},
+  "measured": {
+    "appProcessResidentDeltaAfterTransportPreparationBytes": {"cvPercent": 282.84271247461896, "p50": 0, "p95": 9830.399999999994, "samples": [0, 0, 0, 0, 0, 0, 16384, 0, 0]},
+    "appProcessResidentMaxSampleBytes": {"cvPercent": 14.084078392399398, "p50": 545390592, "p95": 579213721.6, "samples": [579534848, 468238336, 384974848, 545390592, 549240832, 471105536, 400392192, 578732032, 559251456]},
+    "graphTransportPreparationMs": {"cvPercent": 16.112105947080515, "p50": 0.1379251480102539, "p95": 0.17423629760742188, "samples": [0.1150369644165039, 0.18906593322753906, 0.11801719665527344, 0.14209747314453125, 0.11992454528808594, 0.12004375457763672, 0.1519918441772461, 0.1379251480102539, 0.14007091522216797]},
+    "threeDLayoutCallReturnMs": {"cvPercent": 5.80897352470599, "p50": 61, "p95": 68.39999999999998, "samples": [57, 65.99999999999999, 63, 61, 59, 69.99999999999999, 61, 61, 63]},
+    "threeDLayoutPreparationMs": {"cvPercent": 34.40104580768907, "p50": 1, "p95": 2, "samples": [1, 2, 1, 2, 1, 2, 1, 2, 1]},
+    "threeDLayoutZeroDelayTimerProbeMs": {"cvPercent": 5.532551085910771, "p50": 65, "p95": 71.8, "samples": [60, 69.99999999999999, 66, 65, 63, 73.00000000000001, 65, 64, 68]},
+    "threeDLensToSettledMs": {"cvPercent": 2.1529126027493914, "p50": 4223.818063735962, "p95": 4401.826810836792, "samples": [4166.895031929016, 4216.812014579773, 4296.100974082947, 4149.734020233154, 4192.720055580139, 4281.2180519104, 4469.300031661987, 4300.616979598999, 4223.818063735962]},
+    "threeDLoadToSettledPaintMs": {"cvPercent": 1.9013304122604922, "p50": 8940.142035484314, "p95": 9156.396579742432, "samples": [8669.563055038452, 9053.261995315552, 8940.142035484314, 8711.652040481567, 8725.776076316833, 9225.152969360352, 8952.623963356018, 8911.563038825989, 8977.383971214294]},
+    "threeDSearchToSettledMs": {"cvPercent": 13.458132899879185, "p50": 40.820956230163574, "p95": 54.07557487487793, "samples": [38.77890110015869, 50.78697204589844, 56.26797676086426, 40.820956230163574, 39.157986640930176, 40.956974029541016, 47.106027603149414, 39.23296928405762, 40.35794734954834]},
+    "twoDRuntimeLensToDiagnosticsMs": {"cvPercent": 0.8365004823553355, "p50": 6778.491020202637, "p95": 6836.987853050232, "samples": [6843.169093132019, 6683.105945587158, 6698.495030403137, 6682.4270486831665, 6784.962058067322, 6827.715992927551, 6778.491020202637, 6784.489989280701, 6759.257912635803]},
+    "twoDRuntimeLoadToDiagnosticsMs": {"cvPercent": 1.4093096593243795, "p50": 699.8279094696045, "p95": 716.9332027435303, "samples": [697.2379684448242, 703.2010555267334, 689.2850399017334, 696.9180107116699, 716.4249420166016, 699.8279094696045, 711.8620872497559, 717.2720432281494, 690.6120777130127]},
+    "twoDRuntimeSearchToDiagnosticsMs": {"cvPercent": 9.564591026710684, "p50": 24.397969245910645, "p95": 29.26173210144043, "samples": [26.454925537109375, 23.499011993408203, 24.69801902770996, 22.71890640258789, 24.397969245910645, 25.11906623840332, 31.132936477661133, 23.579001426696777, 23.624062538146973]}
+  },
+  "memoryScope": "app_process_resident_max_sample_bytes_only",
+  "parity": {
+    "matchesFixture": true,
+    "threeDQueryableEdges": 59512,
+    "threeDQueryableNodes": 25000,
+    "twoDQueryableEdges": 59512,
+    "twoDQueryableNodes": 25000
+  },
+  "protocol": {"coldRuns": 1, "measuredRuns": 9, "warmupRuns": 2},
+  "schemaVersion": 1
+}

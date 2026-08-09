@@ -32,6 +32,17 @@
 		100000000000000000000123 /* AgentIntegrations in Resources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000026 /* AgentIntegrations */; };
 		100000000000000000000124 /* BrainBarTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000027 /* BrainBarTheme.swift */; };
 		100000000000000000000125 /* AgentActivityClaudeInstaller.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000028 /* AgentActivityClaudeInstaller.swift */; };
+		100000000000000000000126 /* GraphDataStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000029 /* GraphDataStore.swift */; };
+		100000000000000000000127 /* SetupDoctorService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10000000000000000000002A /* SetupDoctorService.swift */; };
+		100000000000000000000128 /* SavedGraphViewStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10000000000000000000002B /* SavedGraphViewStore.swift */; };
+		100000000000000000000129 /* GraphChangeRadar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10000000000000000000002C /* GraphChangeRadar.swift */; };
+		10000000000000000000012A /* GraphChangeRadarService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10000000000000000000002D /* GraphChangeRadarService.swift */; };
+		10000000000000000000012B /* GraphChangeRadarTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10000000000000000000002E /* GraphChangeRadarTests.swift */; };
+		10000000000000000000012C /* AgentActivityWorkflowTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10000000000000000000002F /* AgentActivityWorkflowTests.swift */; };
+		10000000000000000000012D /* GraphEvidence in Resources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000040 /* GraphEvidence */; };
+		10000000000000000000012E /* AgentActivityFSEventPathDecoderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000041 /* AgentActivityFSEventPathDecoderTests.swift */; };
+		10000000000000000000012F /* Graph2DOfflineRuntimeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000042 /* Graph2DOfflineRuntimeTests.swift */; };
+		100000000000000000000130 /* Graph3DPresentationStateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000043 /* Graph3DPresentationStateTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -73,6 +84,17 @@
 		100000000000000000000026 /* AgentIntegrations */ = {isa = PBXFileReference; lastKnownFileType = folder; path = AgentIntegrations; sourceTree = "<group>"; };
 		100000000000000000000027 /* BrainBarTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrainBarTheme.swift; sourceTree = "<group>"; };
 		100000000000000000000028 /* AgentActivityClaudeInstaller.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentActivityClaudeInstaller.swift; sourceTree = "<group>"; };
+		100000000000000000000029 /* GraphDataStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GraphDataStore.swift; sourceTree = "<group>"; };
+		10000000000000000000002A /* SetupDoctorService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SetupDoctorService.swift; sourceTree = "<group>"; };
+		10000000000000000000002B /* SavedGraphViewStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SavedGraphViewStore.swift; sourceTree = "<group>"; };
+		10000000000000000000002C /* GraphChangeRadar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GraphChangeRadar.swift; sourceTree = "<group>"; };
+		10000000000000000000002D /* GraphChangeRadarService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GraphChangeRadarService.swift; sourceTree = "<group>"; };
+		10000000000000000000002E /* GraphChangeRadarTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GraphChangeRadarTests.swift; sourceTree = "<group>"; };
+		10000000000000000000002F /* AgentActivityWorkflowTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentActivityWorkflowTests.swift; sourceTree = "<group>"; };
+		100000000000000000000041 /* AgentActivityFSEventPathDecoderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentActivityFSEventPathDecoderTests.swift; sourceTree = "<group>"; };
+		100000000000000000000042 /* Graph2DOfflineRuntimeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Graph2DOfflineRuntimeTests.swift; sourceTree = "<group>"; };
+		100000000000000000000043 /* Graph3DPresentationStateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Graph3DPresentationStateTests.swift; sourceTree = "<group>"; };
+		100000000000000000000040 /* GraphEvidence */ = {isa = PBXFileReference; lastKnownFileType = folder; path = GraphEvidence; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -120,6 +142,7 @@
 			children = (
 				100000000000000000000003 /* BrainBarConfig.swift */,
 				100000000000000000000022 /* AgentActivity.swift */,
+				10000000000000000000002C /* GraphChangeRadar.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -136,6 +159,10 @@
 				100000000000000000000023 /* AgentActivityService.swift */,
 				100000000000000000000024 /* AgentActivityCodexInstaller.swift */,
 				100000000000000000000028 /* AgentActivityClaudeInstaller.swift */,
+				100000000000000000000029 /* GraphDataStore.swift */,
+				10000000000000000000002A /* SetupDoctorService.swift */,
+				10000000000000000000002B /* SavedGraphViewStore.swift */,
+				10000000000000000000002D /* GraphChangeRadarService.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -157,6 +184,11 @@
 			isa = PBXGroup;
 			children = (
 				100000000000000000000011 /* BrainBarTests.swift */,
+				10000000000000000000002E /* GraphChangeRadarTests.swift */,
+				10000000000000000000002F /* AgentActivityWorkflowTests.swift */,
+				100000000000000000000041 /* AgentActivityFSEventPathDecoderTests.swift */,
+				100000000000000000000042 /* Graph2DOfflineRuntimeTests.swift */,
+				100000000000000000000043 /* Graph3DPresentationStateTests.swift */,
 			);
 			path = BrainBarTests;
 			sourceTree = "<group>";
@@ -177,6 +209,7 @@
 				100000000000000000000015 /* Assets.xcassets */,
 				100000000000000000000018 /* Graph2D */,
 				100000000000000000000017 /* Graph3D */,
+				100000000000000000000040 /* GraphEvidence */,
 				100000000000000000000025 /* bin */,
 				100000000000000000000026 /* AgentIntegrations */,
 			);
@@ -267,6 +300,7 @@
 				100000000000000000000114 /* Assets.xcassets in Resources */,
 				100000000000000000000117 /* Graph2D in Resources */,
 				100000000000000000000116 /* Graph3D in Resources */,
+				10000000000000000000012D /* GraphEvidence in Resources */,
 				100000000000000000000122 /* bin in Resources */,
 				100000000000000000000123 /* AgentIntegrations in Resources */,
 			);
@@ -305,6 +339,11 @@
 				100000000000000000000121 /* AgentActivityCodexInstaller.swift in Sources */,
 				100000000000000000000125 /* AgentActivityClaudeInstaller.swift in Sources */,
 				100000000000000000000124 /* BrainBarTheme.swift in Sources */,
+				100000000000000000000126 /* GraphDataStore.swift in Sources */,
+				100000000000000000000127 /* SetupDoctorService.swift in Sources */,
+				100000000000000000000128 /* SavedGraphViewStore.swift in Sources */,
+				100000000000000000000129 /* GraphChangeRadar.swift in Sources */,
+				10000000000000000000012A /* GraphChangeRadarService.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -313,6 +352,11 @@
 			buildActionMask = 2147483647;
 			files = (
 				100000000000000000000111 /* BrainBarTests.swift in Sources */,
+				10000000000000000000012B /* GraphChangeRadarTests.swift in Sources */,
+				10000000000000000000012C /* AgentActivityWorkflowTests.swift in Sources */,
+				10000000000000000000012E /* AgentActivityFSEventPathDecoderTests.swift in Sources */,
+				10000000000000000000012F /* Graph2DOfflineRuntimeTests.swift in Sources */,
+				100000000000000000000130 /* Graph3DPresentationStateTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -448,14 +492,14 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "-";
 				CODE_SIGN_STYLE = Manual;
-				CURRENT_PROJECT_VERSION = 18;
+				CURRENT_PROJECT_VERSION = 20;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = BrainBar/Resources/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 0.9.81;
+				MARKETING_VERSION = 0.10.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.nova1390.brainbar;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = NO;
@@ -469,14 +513,14 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "-";
 				CODE_SIGN_STYLE = Manual;
-				CURRENT_PROJECT_VERSION = 18;
+				CURRENT_PROJECT_VERSION = 20;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = BrainBar/Resources/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 0.9.81;
+				MARKETING_VERSION = 0.10.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.nova1390.brainbar;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = NO;

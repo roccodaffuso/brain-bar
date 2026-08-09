@@ -1,0 +1,798 @@
+{
+  "cold": {
+    "appProcessResidentDeltaAfterTransportPreparationBytes": {
+      "cvPercent": 0,
+      "p50": 16384,
+      "p95": 16384,
+      "samples": [
+        16384
+      ]
+    },
+    "appProcessResidentMaxSampleBytes": {
+      "cvPercent": 0,
+      "p50": 533135360,
+      "p95": 533135360,
+      "samples": [
+        533135360
+      ]
+    },
+    "graphTransportPreparationMs": {
+      "cvPercent": 0,
+      "p50": 0.07295608520507812,
+      "p95": 0.07295608520507812,
+      "samples": [
+        0.07295608520507812
+      ]
+    },
+    "threeDApplyLensPreLayoutMs": {
+      "cvPercent": 0,
+      "p50": 15,
+      "p95": 15,
+      "samples": [
+        15
+      ]
+    },
+    "threeDEvidenceBuildMs": {
+      "cvPercent": 0,
+      "p50": 4,
+      "p95": 4,
+      "samples": [
+        4
+      ]
+    },
+    "threeDFirstProjectionStaticPaintMs": {
+      "cvPercent": 0,
+      "p50": 11,
+      "p95": 11,
+      "samples": [
+        11
+      ]
+    },
+    "threeDGraphFetchMs": {
+      "cvPercent": 0,
+      "p50": 0,
+      "p95": 0,
+      "samples": [
+        0
+      ]
+    },
+    "threeDGraphJSONParseMs": {
+      "cvPercent": 0,
+      "p50": 0,
+      "p95": 0,
+      "samples": [
+        0
+      ]
+    },
+    "threeDGraphPreparationMs": {
+      "cvPercent": 0,
+      "p50": 2,
+      "p95": 2,
+      "samples": [
+        2
+      ]
+    },
+    "threeDHoverToHighlightMs": {
+      "cvPercent": 0,
+      "p50": 7,
+      "p95": 7,
+      "samples": [
+        7
+      ]
+    },
+    "threeDLayoutCacheReadMs": {
+      "cvPercent": 0,
+      "p50": 9,
+      "p95": 9,
+      "samples": [
+        9
+      ]
+    },
+    "threeDLayoutCallReturnMs": {
+      "cvPercent": 0,
+      "p50": 41,
+      "p95": 41,
+      "samples": [
+        41
+      ]
+    },
+    "threeDLayoutEndToEndMs": {
+      "cvPercent": 0,
+      "p50": 276,
+      "p95": 276,
+      "samples": [
+        276
+      ]
+    },
+    "threeDLayoutPreparationMs": {
+      "cvPercent": 0,
+      "p50": 1,
+      "p95": 1,
+      "samples": [
+        1
+      ]
+    },
+    "threeDLayoutZeroDelayTimerProbeMs": {
+      "cvPercent": 0,
+      "p50": 41,
+      "p95": 41,
+      "samples": [
+        41
+      ]
+    },
+    "threeDLensToSettledMs": {
+      "cvPercent": 0,
+      "p50": 352.83899307250977,
+      "p95": 352.83899307250977,
+      "samples": [
+        352.83899307250977
+      ]
+    },
+    "threeDLoadToSettledPaintMs": {
+      "cvPercent": 0,
+      "p50": 1860.0430488586426,
+      "p95": 1860.0430488586426,
+      "samples": [
+        1860.0430488586426
+      ]
+    },
+    "threeDMeshHitGeometryMs": {
+      "cvPercent": 0,
+      "p50": 17,
+      "p95": 17,
+      "samples": [
+        17
+      ]
+    },
+    "threeDMetadataReplayMs": {
+      "cvPercent": 0,
+      "p50": 0,
+      "p95": 0,
+      "samples": [
+        0
+      ]
+    },
+    "threeDNativePrepareToIndexMs": {
+      "cvPercent": 0,
+      "p50": 1050.3300428390503,
+      "p95": 1050.3300428390503,
+      "samples": [
+        1050.3300428390503
+      ]
+    },
+    "threeDNavigationToAPIReadyMs": {
+      "cvPercent": 0,
+      "p50": 365.94104766845703,
+      "p95": 365.94104766845703,
+      "samples": [
+        365.94104766845703
+      ]
+    },
+    "threeDNormalizeGraphMs": {
+      "cvPercent": 0,
+      "p50": 19,
+      "p95": 19,
+      "samples": [
+        19
+      ]
+    },
+    "threeDOverviewCommunityTransitionMs": {
+      "cvPercent": 0,
+      "p50": 35,
+      "p95": 35,
+      "samples": [
+        35
+      ]
+    },
+    "threeDPanOrbitFrameMs": {
+      "cvPercent": 0,
+      "p50": 3,
+      "p95": 3,
+      "samples": [
+        3
+      ]
+    },
+    "threeDPresentationIndexBuildMs": {
+      "cvPercent": 0,
+      "p50": 58,
+      "p95": 58,
+      "samples": [
+        58
+      ]
+    },
+    "threeDProbeGraphFetchAndParseMs": {
+      "cvPercent": 0,
+      "p50": 8,
+      "p95": 8,
+      "samples": [
+        8
+      ]
+    },
+    "threeDSearchToSettledMs": {
+      "cvPercent": 0,
+      "p50": 22.498011589050293,
+      "p95": 22.498011589050293,
+      "samples": [
+        22.498011589050293
+      ]
+    },
+    "threeDSelectionToFirstFeedbackMs": {
+      "cvPercent": 0,
+      "p50": 12,
+      "p95": 12,
+      "samples": [
+        12
+      ]
+    },
+    "threeDSidebarOpenReframeMs": {
+      "cvPercent": 0,
+      "p50": 11,
+      "p95": 11,
+      "samples": [
+        11
+      ]
+    },
+    "twoDRuntimeLensToDiagnosticsMs": {
+      "cvPercent": 0,
+      "p50": 1751.0409355163574,
+      "p95": 1751.0409355163574,
+      "samples": [
+        1751.0409355163574
+      ]
+    },
+    "twoDRuntimeLoadToDiagnosticsMs": {
+      "cvPercent": 0,
+      "p50": 268.6810493469238,
+      "p95": 268.6810493469238,
+      "samples": [
+        268.6810493469238
+      ]
+    },
+    "twoDRuntimeSearchToDiagnosticsMs": {
+      "cvPercent": 0,
+      "p50": 19.381046295166016,
+      "p95": 19.381046295166016,
+      "samples": [
+        19.381046295166016
+      ]
+    }
+  },
+  "environment": {
+    "operatingSystemVersion": "Version 26.5.2 (Build 25F84)",
+    "physicalMemoryBytes": 17179869184,
+    "processIdentifier": 98912
+  },
+  "fixture": {
+    "edgeCount": 29868,
+    "name": "inspected-shape",
+    "nodeCount": 12547
+  },
+  "measured": {
+    "appProcessResidentDeltaAfterTransportPreparationBytes": {
+      "cvPercent": 0,
+      "p50": 16384,
+      "p95": 16384,
+      "samples": [
+        16384,
+        16384,
+        16384,
+        16384,
+        16384,
+        16384,
+        16384,
+        16384,
+        16384
+      ]
+    },
+    "appProcessResidentMaxSampleBytes": {
+      "cvPercent": 4.6760541281809775,
+      "p50": 546750464,
+      "p95": 592782950.4,
+      "samples": [
+        593149952,
+        592232448,
+        590495744,
+        522305536,
+        536576000,
+        546750464,
+        549273600,
+        542195712,
+        536428544
+      ]
+    },
+    "graphTransportPreparationMs": {
+      "cvPercent": 5.641817151567182,
+      "p50": 0.13196468353271484,
+      "p95": 0.1453876495361328,
+      "samples": [
+        0.13709068298339844,
+        0.12803077697753906,
+        0.1329183578491211,
+        0.1289844512939453,
+        0.13196468353271484,
+        0.12505054473876953,
+        0.13697147369384766,
+        0.15091896057128906,
+        0.12600421905517578
+      ]
+    },
+    "threeDApplyLensPreLayoutMs": {
+      "cvPercent": 0,
+      "p50": 16,
+      "p95": 16,
+      "samples": [
+        16,
+        16,
+        16,
+        16,
+        16,
+        16,
+        16,
+        16,
+        16
+      ]
+    },
+    "threeDEvidenceBuildMs": {
+      "cvPercent": 9.846466807299846,
+      "p50": 4,
+      "p95": 5,
+      "samples": [
+        4,
+        4,
+        5,
+        4,
+        4,
+        4,
+        4,
+        4,
+        5
+      ]
+    },
+    "threeDFirstProjectionStaticPaintMs": {
+      "cvPercent": 5.884389414473131,
+      "p50": 8,
+      "p95": 9,
+      "samples": [
+        9,
+        9,
+        8,
+        8,
+        8,
+        9,
+        9,
+        8,
+        8
+      ]
+    },
+    "threeDGraphFetchMs": {
+      "cvPercent": 0,
+      "p50": 0,
+      "p95": 0,
+      "samples": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    "threeDGraphJSONParseMs": {
+      "cvPercent": 0,
+      "p50": 0,
+      "p95": 0,
+      "samples": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    "threeDGraphPreparationMs": {
+      "cvPercent": 20.203050891044214,
+      "p50": 2,
+      "p95": 3,
+      "samples": [
+        2,
+        2,
+        2,
+        2,
+        3,
+        3,
+        2,
+        2,
+        3
+      ]
+    },
+    "threeDHoverToHighlightMs": {
+      "cvPercent": 8.695652173913043,
+      "p50": 8,
+      "p95": 8.6,
+      "samples": [
+        7,
+        7,
+        8,
+        8,
+        7,
+        8,
+        7,
+        9,
+        8
+      ]
+    },
+    "threeDLayoutCacheReadMs": {
+      "cvPercent": 31.977994812054156,
+      "p50": 3,
+      "p95": 4.799999999999999,
+      "samples": [
+        2,
+        3,
+        3,
+        3,
+        3,
+        6,
+        3,
+        3,
+        3
+      ]
+    },
+    "threeDLayoutCallReturnMs": {
+      "cvPercent": 1.3730228760903833,
+      "p50": 46,
+      "p95": 46.6,
+      "samples": [
+        45,
+        46,
+        45,
+        46,
+        46,
+        47,
+        45,
+        46,
+        46
+      ]
+    },
+    "threeDLayoutEndToEndMs": {
+      "cvPercent": 1.7963698486327617,
+      "p50": 83,
+      "p95": 85.8,
+      "samples": [
+        84,
+        83,
+        82,
+        82,
+        82,
+        87,
+        84,
+        83,
+        84
+      ]
+    },
+    "threeDLayoutPreparationMs": {
+      "cvPercent": 53.45224838248488,
+      "p50": 1,
+      "p95": 1,
+      "samples": [
+        0,
+        0,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1
+      ]
+    },
+    "threeDLayoutZeroDelayTimerProbeMs": {
+      "cvPercent": 1.3730228760903833,
+      "p50": 46,
+      "p95": 46.6,
+      "samples": [
+        45,
+        46,
+        45,
+        46,
+        46,
+        47,
+        45,
+        46,
+        46
+      ]
+    },
+    "threeDLensToSettledMs": {
+      "cvPercent": 1.5931857170111345,
+      "p50": 187.14606761932373,
+      "p95": 191.45901203155518,
+      "samples": [
+        183.01892280578613,
+        183.601975440979,
+        183.2970380783081,
+        187.25299835205078,
+        185.9610080718994,
+        187.14606761932373,
+        187.15500831604004,
+        192.33500957489014,
+        190.14501571655273
+      ]
+    },
+    "threeDLoadToSettledPaintMs": {
+      "cvPercent": 0.8197682443786375,
+      "p50": 1250.100016593933,
+      "p95": 1256.26859664917,
+      "samples": [
+        1251.505970954895,
+        1258.8109970092773,
+        1228.3200025558472,
+        1250.2840757369995,
+        1237.3191118240356,
+        1236.7008924484253,
+        1250.100016593933,
+        1252.4549961090088,
+        1231.0220003128052
+      ]
+    },
+    "threeDMeshHitGeometryMs": {
+      "cvPercent": 2.719641466102106,
+      "p50": 17,
+      "p95": 18,
+      "samples": [
+        17,
+        17,
+        17,
+        17,
+        17,
+        18,
+        18,
+        17,
+        18
+      ]
+    },
+    "threeDMetadataReplayMs": {
+      "cvPercent": 0,
+      "p50": 0,
+      "p95": 0,
+      "samples": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    "threeDNativePrepareToIndexMs": {
+      "cvPercent": 1.210792271377839,
+      "p50": 920.1970100402832,
+      "p95": 930.1532030105591,
+      "samples": [
+        925.8319139480591,
+        933.0340623855591,
+        905.5559635162354,
+        924.4740009307861,
+        911.9170904159546,
+        900.0799655914307,
+        920.1970100402832,
+        921.81396484375,
+        901.2399911880493
+      ]
+    },
+    "threeDNavigationToAPIReadyMs": {
+      "cvPercent": 1.6323847176942474,
+      "p50": 57.17599391937256,
+      "p95": 58.34219455718994,
+      "samples": [
+        57.09207057952881,
+        57.25598335266113,
+        56.205034255981445,
+        57.983994483947754,
+        55.95290660858154,
+        57.29103088378906,
+        58.580994606018066,
+        57.17599391937256,
+        55.44900894165039
+      ]
+    },
+    "threeDNormalizeGraphMs": {
+      "cvPercent": 2.5883347784734942,
+      "p50": 22,
+      "p95": 22.6,
+      "samples": [
+        22,
+        22,
+        21,
+        22,
+        22,
+        23,
+        22,
+        22,
+        21
+      ]
+    },
+    "threeDOverviewCommunityTransitionMs": {
+      "cvPercent": 1.9860028684762758,
+      "p50": 37.000000000000114,
+      "p95": 38,
+      "samples": [
+        38,
+        36,
+        37,
+        37,
+        38,
+        37.000000000000114,
+        36,
+        37.000000000000114,
+        38
+      ]
+    },
+    "threeDPanOrbitFrameMs": {
+      "cvPercent": 14.886458551295739,
+      "p50": 2,
+      "p95": 2.5999999999999996,
+      "samples": [
+        2,
+        3,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2
+      ]
+    },
+    "threeDPresentationIndexBuildMs": {
+      "cvPercent": 1.6300400310146286,
+      "p50": 64,
+      "p95": 66,
+      "samples": [
+        64,
+        64,
+        63,
+        64,
+        64,
+        66,
+        66,
+        65,
+        66
+      ]
+    },
+    "threeDProbeGraphFetchAndParseMs": {
+      "cvPercent": 4.251883394061285,
+      "p50": 9.999999999999993,
+      "p95": 10,
+      "samples": [
+        9,
+        9,
+        9.999999999999993,
+        10,
+        9.999999999999993,
+        10,
+        10,
+        10,
+        9.999999999999993
+      ]
+    },
+    "threeDSearchToSettledMs": {
+      "cvPercent": 0.7239300522278244,
+      "p50": 22.52209186553955,
+      "p95": 22.675180435180664,
+      "samples": [
+        22.562026977539062,
+        22.27306365966797,
+        22.16804027557373,
+        22.52209186553955,
+        22.691965103149414,
+        22.65000343322754,
+        22.518038749694824,
+        22.612929344177246,
+        22.519946098327637
+      ]
+    },
+    "threeDSelectionToFirstFeedbackMs": {
+      "cvPercent": 3.9283710065919304,
+      "p50": 12,
+      "p95": 12.6,
+      "samples": [
+        12,
+        12,
+        12,
+        12,
+        12,
+        13,
+        12,
+        11,
+        12
+      ]
+    },
+    "threeDSidebarOpenReframeMs": {
+      "cvPercent": 4.677999553754848,
+      "p50": 12,
+      "p95": 13,
+      "samples": [
+        13,
+        12,
+        12,
+        12,
+        13,
+        11,
+        12,
+        12,
+        12
+      ]
+    },
+    "twoDRuntimeLensToDiagnosticsMs": {
+      "cvPercent": 0.17969168239477418,
+      "p50": 1756.9689750671387,
+      "p95": 1761.7218255996704,
+      "samples": [
+        1756.392002105713,
+        1756.9689750671387,
+        1753.3459663391113,
+        1752.16805934906,
+        1762.6971006393433,
+        1757.2200298309326,
+        1758.8540315628052,
+        1754.5289993286133,
+        1760.2589130401611
+      ]
+    },
+    "twoDRuntimeLoadToDiagnosticsMs": {
+      "cvPercent": 3.522281954961961,
+      "p50": 273.2729911804199,
+      "p95": 293.2080030441284,
+      "samples": [
+        270.550012588501,
+        273.2729911804199,
+        292.9619550704956,
+        269.20199394226074,
+        270.8050012588501,
+        289.71004486083984,
+        273.30195903778076,
+        271.71599864959717,
+        293.3720350265503
+      ]
+    },
+    "twoDRuntimeSearchToDiagnosticsMs": {
+      "cvPercent": 1.6219401392357933,
+      "p50": 19.778966903686523,
+      "p95": 20.172762870788574,
+      "samples": [
+        19.165992736816406,
+        20.00296115875244,
+        19.640088081359863,
+        20.285964012145996,
+        19.428014755249023,
+        19.778966903686523,
+        19.962072372436523,
+        19.930005073547363,
+        19.55699920654297
+      ]
+    }
+  },
+  "memoryScope": "app_process_resident_max_sample_bytes_only",
+  "parity": {
+    "matchesFixture": true,
+    "threeDQueryableEdges": 29868,
+    "threeDQueryableNodes": 12547,
+    "twoDQueryableEdges": 29868,
+    "twoDQueryableNodes": 12547
+  },
+  "protocol": {
+    "coldRuns": 1,
+    "measuredRuns": 9,
+    "warmupRuns": 2
+  },
+  "schemaVersion": 1
+}

@@ -1,0 +1,60 @@
+{
+  "schemaVersion": 1,
+  "kind": "graph3d-whole-renderer-memory-evidence",
+  "captureKind": "synchronized-all-process-activity-monitor-sample",
+  "referenceHost": {
+    "model": "MacBook Air Mac15,12",
+    "chip": "Apple M3 (8 cores)",
+    "physicalMemoryBytes": 17179869184,
+    "operatingSystem": "macOS 26.5.2 (build 25F84)"
+  },
+  "focusedTest": {
+    "name": "testGraph3DOverviewFitKeepsReviewedSpatialFixturesVisibleInCompactViewport",
+    "durationSeconds": 3.11,
+    "fixtureSequence": [
+      { "name": "1k", "nodeCount": 1000, "edgeCount": 2380 },
+      { "name": "inspected-shape", "nodeCount": 12547, "edgeCount": 29868 },
+      { "name": "25k-stress", "nodeCount": 25000, "edgeCount": 59512 }
+    ]
+  },
+  "singleFocusedWebView": {
+    "sampleWindowSeconds": 3.172,
+    "maximumSampleAtSeconds": 8.704,
+    "sampleRows": {
+      "applicationRows": 2,
+      "directChildRows": 4,
+      "processesAtMaximumSample": 5
+    },
+    "physicalFootprintBytes": {
+      "applicationTestProcess": 35062792,
+      "webKitGPU": 102613760,
+      "webKitNetworking": 9552424,
+      "webKitWebContent": 674382976,
+      "supportingMediaHelper": 5603808,
+      "family": 827215760
+    },
+    "familyPhysicalFootprintMiB": 788.89,
+    "measurementScope": "maximum-sampled-physical-footprint"
+  },
+  "releaseReviewBudget": {
+    "classification": "provisional-single-view-maximum-sampled-family-physical-footprint",
+    "referenceHostCeilingMiB": 900,
+    "observedMiB": 788.89,
+    "headroomMiB": 111.11,
+    "passed": true,
+    "scope": "one-focused-visible-webview-on-the-reference-host"
+  },
+  "harnessStressUpperBound": {
+    "scenarioWebViews": 15,
+    "maximumConcurrentFamilySampleBytes": 3196977184,
+    "maximumConcurrentFamilySampleMiB": 3048.88,
+    "concurrentWebContentProcesses": 14,
+    "classification": "harness-stress-upper-bound-not-product-single-view-memory"
+  },
+  "limitations": [
+    "sampled-physical-footprint-is-not-a-true-peak",
+    "not-an-allocation-or-leak-proof",
+    "single-focused-webview-and-harness-stress-are-separate-capture-conditions",
+    "provisional-release-ceiling-is-not-an-allocation-or-leak-proof"
+  ]
+}

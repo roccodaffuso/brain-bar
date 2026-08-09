@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "kind": "graph3d-presentation-baseline",
+  "capture": "before",
+  "referenceCommit": "0137a2e",
+  "sourceInspection": "read-only-git-object",
+  "renderedRuntime": false,
+  "diagnosticAvailability": {
+    "layoutSchemaVersion": false,
+    "layoutProfile": false,
+    "detailLevel": false,
+    "detailReason": false,
+    "paintedNodeCount": false,
+    "paintedEdgeCount": false,
+    "communityAnchorCount": false,
+    "persistentLabelCount": false,
+    "sidebarState": false,
+    "cameraPreset": true,
+    "staticLayerRebuildMs": false,
+    "labelAllocationMs": false,
+    "frameQuality": false
+  },
+  "unavailableMetrics": [
+    "panOrbitFrameTimeMs",
+    "hoverToHighlightMs",
+    "selectionToFirstFeedbackMs",
+    "sidebarOpenReframeMs",
+    "overviewCommunityTransitionMs",
+    "frameQuality"
+  ],
+  "conclusion": "new-presentation-metrics-not-exposed-at-baseline"
+}

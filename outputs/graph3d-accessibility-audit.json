@@ -1,0 +1,82 @@
+{
+  "schemaVersion": 1,
+  "kind": "graph3d-accessibility-audit",
+  "publicSafe": true,
+  "methodology": [
+    "Final CSS tokens composited over declared dark surfaces using WCAG relative luminance.",
+    "Static source assertions cover names, live regions, both :focus and :focus-visible selectors, 2px solid focus rings, target declarations, and non-color state cues.",
+    "Focused WKWebView XCTest verifies DOM focusability, rendered target sizes, names, and live announcements with the public fixture; focus pseudo-state styling is source-audited because the headless document does not receive system focus."
+  ],
+  "contrast": [
+    {
+      "name": "text-secondary",
+      "foreground": "#9f9ca6",
+      "background": "#10131b",
+      "ratio": 6.9,
+      "minimum": 4.5,
+      "status": "pass"
+    },
+    {
+      "name": "text-muted",
+      "foreground": "#8f8c99",
+      "background": "#10131b",
+      "ratio": 5.62,
+      "minimum": 4.5,
+      "status": "pass"
+    },
+    {
+      "name": "text-faint",
+      "foreground": "#898694",
+      "background": "#10131b",
+      "ratio": 5.22,
+      "minimum": 4.5,
+      "status": "pass"
+    },
+    {
+      "name": "focus-accent",
+      "foreground": "#7fa0ff",
+      "background": "#10131b",
+      "ratio": 7.4,
+      "minimum": 4.5,
+      "status": "pass"
+    },
+    {
+      "name": "warning",
+      "foreground": "#f5b85b",
+      "background": "#10131b",
+      "ratio": 10.51,
+      "minimum": 4.5,
+      "status": "pass"
+    },
+    {
+      "name": "canvas-label",
+      "foreground": "#9e9ba5",
+      "background": "#070b13",
+      "ratio": 7.24,
+      "minimum": 4.5,
+      "status": "pass"
+    }
+  ],
+  "keyboardAndPointer": {
+    "status": "pass",
+    "minimumTargetPx": 24,
+    "primaryToolbarPreferredPx": 32,
+    "runtimeTest": "BrainBarTests/testGraph3DAccessibilityAuditUsesPublicFixture"
+  },
+  "nonColorStateCues": {
+    "selected": [
+      "larger node radius",
+      "bright canvas outline",
+      "persistent label"
+    ],
+    "path": [
+      "emphasized endpoints",
+      "larger intermediate nodes",
+      "numbered DOM path steps"
+    ],
+    "warning": [
+      "exclamation icon",
+      "pending graph refresh text"
+    ]
+  }
+}

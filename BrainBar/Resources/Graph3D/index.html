@@ -11,17 +11,33 @@
       <section id="stage" aria-label="3D graph">
         <canvas id="graph-visual" aria-hidden="true"></canvas>
         <div id="hud" aria-live="polite" hidden></div>
+        <div id="graph-controls" role="toolbar" aria-label="Graph presentation controls">
+          <label>Detail
+            <select id="detail-level" aria-label="Painted detail level">
+              <option value="overview">Overview</option>
+              <option value="balanced">Balanced</option>
+              <option value="full">Full</option>
+            </select>
+          </label>
+          <button id="sidebar-toggle" type="button" aria-label="Toggle graph context panel" aria-expanded="false">Panel</button>
+          <button id="camera-back" type="button" aria-label="Return to the previous graph view" disabled>Back</button>
+        </div>
+        <div id="navigation-hint" aria-hidden="true">
+          Drag to orbit <span>·</span> Shift-drag to pan <span>·</span> Scroll to zoom
+        </div>
+        <div id="graph-status" class="sr-only" aria-live="polite"></div>
         <div id="overlay" hidden></div>
       </section>
       <aside id="sidebar">
+        <div id="sidebar-resizer" role="separator" aria-label="Docked context panel width" aria-orientation="vertical" tabindex="0"></div>
         <div id="search-wrap">
-          <input id="search" type="search" placeholder="Search nodes..." autocomplete="off">
+          <input id="search" type="search" aria-label="Search graph nodes" placeholder="Search nodes..." autocomplete="off">
           <div id="search-results"></div>
         </div>
         <section id="info-panel">
           <h2>Current Context</h2>
           <div id="node-info">
-            <p class="muted italic">Click a node to inspect it</p>
+            <p class="muted italic">Click a node to inspect it. Drag the graph to orbit.</p>
           </div>
         </section>
         <section id="legend-wrap">
@@ -45,6 +61,7 @@
         showBootError(event.reason?.message || '3D graph failed to load');
       });
     </script>
+    <script src="../GraphEvidence/brainbar-graph-evidence.js"></script>
     <script type="module" src="./graph3d.js"></script>
   </body>
 </html>

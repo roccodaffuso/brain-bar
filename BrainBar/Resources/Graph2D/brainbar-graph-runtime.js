@@ -562,25 +562,59 @@
       .map((node) => idKey(node.id)));
   }
 
+  function parseSearchQuery(value) {
+    const filters = [];
+    const text = [];
+    const supported = new Set(['type', 'tag', 'status', 'source', 'date', 'agent']);
+    const tokens = String(value || '').match(/[^\s"]+:"[^"]*"|"[^"]*"|\S+/g) || [];
+    tokens.forEach((token) => {
+      const separator = token.indexOf(':');
+      const name = separator > 0 ? lowerText(token.slice(0, separator)) : '';
+      const rawValue = separator > 0 ? token.slice(separator + 1) : token;
+      const normalizedValue = lowerText(rawValue.replace(/^"|"$/g, ''));
+      if (supported.has(name) && normalizedValue) {
+        filters.push({ name, value: normalizedValue });
+      } else if (normalizedValue) {
+        text.push(normalizedValue);
+      }
+    });
+    return { text: text.join(' '), filters };
+  }
+
+  function matchesSearchFilter(node, filter) {
+    const frontmatter = node?.frontmatter && typeof node.frontmatter === 'object' ? node.frontmatter : {};
+    const values = {
+      type: [node?.type, node?.kind, node?.category, frontmatter.type],
+      tag: [node?.tags, node?.tag, frontmatter.tags],
+      status: [node?.status, frontmatter.status],
+      source: [sourceFileForNode(node), node?.source, node?.context],
+      date: [node?.modified_at, node?.modifiedAt, node?.mtime, frontmatter.modified_at],
+      agent: [node?.agent, node?.agent_id, node?.agentId, node?.__brainBarAgentActive ? 'true active' : 'false']
+    };
+    return (values[filter.name] || [])
+      .flatMap((value) => Array.isArray(value) ? value : [value])
+      .some((value) => lowerText(value).includes(filter.value));
+  }
+
   function search2DNodes(options = {}) {
-    const query = lowerText(options.query);
+    const parsedQuery = parseSearchQuery(options.query);
+    const query = parsedQuery.text;
     const nodes = options.nodes || [];
     const visibleIds = options.visibleNodeIds instanceof Set
       ? options.visibleNodeIds
       : new Set((options.visibleNodeIds || nodes.map((node) => node.id)).map(idKey));
     const limit = Math.max(1, Number(options.limit) || 20);
-    if (!query) {
+    if (!query && parsedQuery.filters.length === 0) {
       return [];
     }
 
     return nodes
-      .filter((node) => visibleIds.has(idKey(node.id)))
       .map((node) => {
         const label = nodeDisplayLabel(node, node.id);
         const sourceFile = sourceFileForNode(node);
         const haystack = lowerText(`${label} ${sourceFile} ${node.id}`);
         const labelLower = lowerText(label);
-        let score = 0;
+        let score = query ? 0 : 320;
         if (labelLower === query) {
           score = 1000;
         } else if (labelLower.startsWith(query)) {
@@ -596,10 +630,12 @@
           id: node.id,
           label,
           sourceFile,
-          score
+          score,
+          hidden: !visibleIds.has(idKey(node.id)),
+          matchesFilters: parsedQuery.filters.every((filter) => matchesSearchFilter(node, filter))
         };
       })
-      .filter((item) => item.score > 0)
+      .filter((item) => item.score > 0 && item.matchesFilters)
       .sort((left, right) => right.score - left.score || left.label.localeCompare(right.label) || idKey(left.id).localeCompare(idKey(right.id)))
       .slice(0, limit);
   }
@@ -775,6 +811,57 @@
       groups: { count: groups.length, hidden: false, disabled: groups.length === 0 },
       wikilinks: { count: health.counts.wikilinkEdges, hidden: false, disabled: health.counts.wikilinkEdges === 0 },
       graphify: { count: health.counts.graphifyEdges, hidden: false, disabled: health.counts.graphifyEdges === 0 }
+    };
+  }
+
+  // Workflow highlighting uses the core's mapped-node projection. It never derives
+  // roles or maps a path to a node on its own.
+  function workflowHighlightState(snapshot = {}, workflowSelectionID = '', visibleNodeIDs = []) {
+    const selectedID = String(workflowSelectionID || '');
+    const workflows = Array.isArray(snapshot.workflows) ? snapshot.workflows : [];
+    const workflow = workflows.find((candidate) => String(candidate?.id || '') === selectedID);
+    if (!workflow) {
+      return { workflowID: '', nodeIds: [], pendingPaths: [] };
+    }
+    const visibleNodeIds = new Set((visibleNodeIDs || []).map(idKey));
+    const mappedNodeIds = new Set((Array.isArray(workflow.nodeIds) ? workflow.nodeIds : [])
+      .map(idKey)
+      .filter((nodeId) => visibleNodeIds.has(nodeId)));
+    const pendingPaths = (Array.isArray(workflow.pendingPaths) ? workflow.pendingPaths : [])
+      .map(String);
+    return {
+      workflowID: String(workflow.id || ''),
+      nodeIds: Array.from(mappedNodeIds).sort(),
+      pendingPaths: Array.from(new Set(pendingPaths)).sort()
+    };
+  }
+
+  function normalizeAgentActivitySnapshot(snapshot = {}) {
+    const events = Array.isArray(snapshot.events) ? snapshot.events : [];
+    return {
+      ...snapshot,
+      events: events.map((event) => ({
+        id: String(event?.id || ''),
+        version: Number(event?.version || 1),
+        action: String(event?.action || 'activity').toLowerCase(),
+        agent: String(event?.agent || 'agent'),
+        path: String(event?.path || ''),
+        timestamp: event?.timestamp || null,
+        nodeId: event?.nodeId == null ? null : String(event.nodeId),
+        label: event?.label == null ? null : String(event.label),
+        sourceFile: event?.sourceFile == null ? null : String(event.sourceFile),
+        pending: Boolean(event?.pending),
+        sessionId: event?.sessionId == null ? null : String(event.sessionId),
+        project: event?.project == null ? null : String(event.project),
+        source: event?.source == null ? null : String(event.source),
+        reason: event?.reason == null ? null : String(event.reason),
+        status: event?.status == null ? null : String(event.status),
+        workflowId: event?.workflowId == null ? null : String(event.workflowId),
+        workflowTitle: event?.workflowTitle == null ? null : String(event.workflowTitle),
+        pathRole: event?.pathRole == null ? null : String(event.pathRole)
+      })),
+      workflows: Array.isArray(snapshot.workflows) ? snapshot.workflows : [],
+      pendingPaths: Array.isArray(snapshot.pendingPaths) ? snapshot.pendingPaths.map(String) : []
     };
   }
 
@@ -1022,6 +1109,7 @@
         if (existingButton) {
           existingButton.dataset.nodeId = String(nodeId);
           addFocusControls(nodeId);
+          renderEvidenceInspector2D({ nodeId });
           return;
         }
         if (!info || !sourceFile) {
@@ -1034,6 +1122,7 @@
         button.textContent = 'Open Note';
         info.insertBefore(button, info.children[1] || null);
         addFocusControls(nodeId);
+        renderEvidenceInspector2D({ nodeId });
       } catch (error) {
         console.debug('BrainBar open note button skipped', error);
       }
@@ -1167,9 +1256,215 @@
         }
 
         info.prepend(panel);
+        renderEvidenceInspector2D({ edgeId, container: panel });
       } catch (error) {
         console.debug('BrainBar edge inspector skipped', error);
       }
+    }
+
+    function evidenceScalar2D(value) {
+      return value === null || ['string', 'number', 'boolean'].includes(typeof value) ? value : '';
+    }
+
+    function evidenceEndpoint2D(value) {
+      const candidate = value && typeof value === 'object'
+        ? value.id ?? value.label ?? value.name
+        : value;
+      return evidenceScalar2D(candidate);
+    }
+
+    function graphEvidenceSnapshot() {
+      const snapshot = currentGraphSnapshot();
+      const evidence = root.BrainBarGraphEvidence;
+      if (!evidence?.build) {
+        return null;
+      }
+      const rawGraph = root.__brainBarGraphJSON;
+      const sourceNodes = Array.isArray(rawGraph?.nodes)
+        ? rawGraph.nodes
+        : (Array.isArray(rawNodes()) ? rawNodes() : (snapshot.nodes || []));
+      const sourceEdges = Array.isArray(rawGraph?.edges)
+        ? rawGraph.edges
+        : (Array.isArray(rawGraph?.links)
+          ? rawGraph.links
+          : (Array.isArray(rawEdges()) ? rawEdges() : (snapshot.edges || [])));
+      const cache = root.__brainBarGraphEvidenceCache;
+      if (cache?.nodes === sourceNodes && cache?.edges === sourceEdges) {
+        return cache.report;
+      }
+      const now = Date.now();
+      let report;
+      try {
+        // Keep the evidence input metadata-only. Besides enforcing the privacy
+        // boundary, this avoids handing renderer-owned cyclic objects to the
+        // shared, data-only rules engine.
+        const graph = {
+          nodes: sourceNodes.map((node) => ({
+            id: evidenceScalar2D(node.id),
+            label: evidenceScalar2D(node.label),
+            title: evidenceScalar2D(node.title),
+            source_file: evidenceScalar2D(node.source_file),
+            _source_file: evidenceScalar2D(node._source_file),
+            sourceFile: evidenceScalar2D(node.sourceFile),
+            community: evidenceScalar2D(node.community),
+            community_name: evidenceScalar2D(node.community_name),
+            group: evidenceScalar2D(node.group),
+            cluster: evidenceScalar2D(node.cluster),
+            mtime: evidenceScalar2D(node.mtime),
+            modified_at: evidenceScalar2D(node.modified_at),
+            modifiedAt: evidenceScalar2D(node.modifiedAt),
+            updated_at: evidenceScalar2D(node.updated_at),
+            updatedAt: evidenceScalar2D(node.updatedAt),
+            status: evidenceScalar2D(node.status),
+            category: evidenceScalar2D(node.category),
+            type: evidenceScalar2D(node.type)
+          })),
+          edges: sourceEdges.map((edge) => ({
+            id: evidenceScalar2D(edge.id),
+            from: evidenceEndpoint2D(edge.from),
+            source: evidenceEndpoint2D(edge.source),
+            to: evidenceEndpoint2D(edge.to),
+            target: evidenceEndpoint2D(edge.target),
+            relation: evidenceScalar2D(edge.relation),
+            type: evidenceScalar2D(edge.type),
+            context: evidenceScalar2D(edge.context),
+            source_file: evidenceScalar2D(edge.source_file),
+            _source_file: evidenceScalar2D(edge._source_file),
+            sourceFile: evidenceScalar2D(edge.sourceFile)
+          }))
+        };
+        report = evidence.build(graph, { now });
+      } catch (error) {
+        root.__brainBarGraphEvidenceError = String(error?.message || error);
+        return null;
+      }
+      root.__brainBarGraphEvidenceCache = { nodes: sourceNodes, edges: sourceEdges, now, report };
+      return report;
+    }
+
+    function evidenceValueText(value) {
+      if (value === undefined || value === null || value === '') return 'not specified';
+      if (typeof value !== 'object') return String(value);
+      const stable = (item) => {
+        if (item === null || typeof item !== 'object') return item;
+        return Array.isArray(item)
+          ? item.map(stable)
+          : Object.keys(item).sort().reduce((result, key) => {
+              result[key] = stable(item[key]);
+              return result;
+            }, {});
+      };
+      return JSON.stringify(stable(value));
+    }
+
+    function proposalSubjectText(proposal) {
+      const subject = proposal.subject || {};
+      const summary = (values, label) => {
+        const entries = values || [];
+        const sample = entries.slice(0, 3).join(', ') || 'none';
+        return `${label} (${entries.length}): ${sample}${entries.length > 3 ? ', …' : ''}`;
+      };
+      return `${summary(subject.nodeIds, 'Nodes')} · ${summary(subject.edgeIds, 'Edges')} · ${summary(subject.sourcePaths, 'Sources')}`;
+    }
+
+    function appendEvidenceRows(container, rows) {
+      const list = root.document.createElement('div');
+      list.className = 'brainbar-evidence-rows';
+      rows.filter(([, value]) => value !== undefined && value !== null && String(value) !== '').forEach(([label, value]) => {
+        const row = root.document.createElement('p');
+        const labelElement = root.document.createElement('strong');
+        labelElement.textContent = label;
+        const valueElement = root.document.createElement('span');
+        valueElement.textContent = String(value);
+        row.append(labelElement, valueElement);
+        list.appendChild(row);
+      });
+      container.appendChild(list);
+    }
+
+    function appendEvidenceLinkSection(container, title, links) {
+      const section = root.document.createElement('section');
+      section.className = 'brainbar-evidence-links';
+      const heading = root.document.createElement('h4');
+      heading.textContent = `${title} (${links.length})`;
+      section.appendChild(heading);
+      if (!links.length) {
+        const empty = root.document.createElement('p');
+        empty.className = 'empty';
+        empty.textContent = 'None in the current graph.';
+        section.appendChild(empty);
+      } else {
+        links.slice(0, 8).forEach((link) => {
+          const row = root.document.createElement('p');
+          row.textContent = `${link.sourceId || 'unknown'} → ${link.targetId || 'unknown'} · ${link.relation || link.context || 'link'} · ${link.provenance || 'Unknown'}`;
+          section.appendChild(row);
+        });
+      }
+      container.appendChild(section);
+    }
+
+    function appendEvidenceHealthSignals(container, report, nodeId, edgeId) {
+      const signals = (report.proposals || []).filter((proposal) => (
+        (proposal.subject?.nodeIds || []).map(String).includes(String(nodeId || '')) ||
+        (proposal.subject?.edgeIds || []).map(String).includes(String(edgeId || ''))
+      ));
+      const section = root.document.createElement('section');
+      section.className = 'brainbar-evidence-health';
+      const heading = root.document.createElement('h4');
+      heading.textContent = `Health signals (${signals.length})`;
+      section.appendChild(heading);
+      signals.slice(0, 4).forEach((proposal) => {
+        const row = root.document.createElement('p');
+        row.textContent = `${proposal.severity || 'info'} · ${evidenceValueText(proposal.evidence)}`;
+        section.appendChild(row);
+      });
+      if (!signals.length) {
+        const empty = root.document.createElement('p');
+        empty.className = 'empty';
+        empty.textContent = 'No deterministic signals for this item.';
+        section.appendChild(empty);
+      }
+      container.appendChild(section);
+    }
+
+    function renderEvidenceInspector2D({ nodeId = '', edgeId = '', container = null } = {}) {
+      const report = graphEvidenceSnapshot();
+      if (!report) {
+        return;
+      }
+      const host = container || root.document.getElementById('info-content');
+      if (!host) {
+        return;
+      }
+      host.querySelector('.brainbar-evidence-inspector')?.remove();
+      const inspector = root.document.createElement('section');
+      inspector.className = 'brainbar-evidence-inspector';
+      const title = root.document.createElement('h3');
+      title.textContent = 'Evidence';
+      inspector.appendChild(title);
+      if (nodeId) {
+        const item = report.nodeEvidenceById?.[String(nodeId)];
+        if (!item) return;
+        appendEvidenceRows(inspector, [
+          ['Community', item.community], ['Modified', item.mtime], ['Status', item.status], ['Category', item.category]
+        ]);
+        appendEvidenceLinkSection(inspector, 'Incoming links', item.incoming || []);
+        appendEvidenceLinkSection(inspector, 'Outgoing links', item.outgoing || []);
+        appendEvidenceHealthSignals(inspector, report, nodeId, '');
+      } else if (edgeId) {
+        const item = report.edgeEvidenceById?.[String(edgeId)];
+        if (!item) return;
+        appendEvidenceRows(inspector, [
+          ['Relationship', item.relation], ['Context', item.context], ['Provenance', item.provenance], ['Source', item.sourceFile]
+        ]);
+        const source = report.nodeEvidenceById?.[String(item.sourceId)];
+        const target = report.nodeEvidenceById?.[String(item.targetId)];
+        appendEvidenceRows(inspector, [
+          ['Source community', source?.community], ['Target community', target?.community], ['Source status', source?.status], ['Target status', target?.status]
+        ]);
+        appendEvidenceHealthSignals(inspector, report, '', edgeId);
+      }
+      host.appendChild(inspector);
     }
 
     function installNodeActionBridge() {
@@ -1223,6 +1518,66 @@
         nodesDataSet.update(nodeUpdates);
       }
       graphNetwork()?.redraw();
+    }
+
+    function currentWorkflowHighlight() {
+      const snapshot = root.__brainBarAgentActivitySnapshot || {};
+      const graph = currentGraphSnapshot();
+      return workflowHighlightState(snapshot, root.__brainBarWorkflowHighlightID, graph.currentNodes
+        .filter((node) => !node.hidden)
+        .map((node) => node.id));
+    }
+
+    function installWorkflowHighlightOverlay() {
+      const currentNetwork = graphNetwork();
+      if (!currentNetwork || root.__brainBarWorkflowHighlightOverlayNetwork === currentNetwork) {
+        return;
+      }
+      root.__brainBarWorkflowHighlightOverlayNetwork = currentNetwork;
+      currentNetwork.on('afterDrawing', (context) => {
+        const highlight = currentWorkflowHighlight();
+        if (!highlight.nodeIds.length) {
+          return;
+        }
+        const positions = currentNetwork.getPositions(highlight.nodeIds);
+        const visibleNodeIds = new Set(highlight.nodeIds.map(idKey));
+        const snapshot = currentGraphSnapshot();
+        context.save();
+        snapshot.currentEdges.forEach((edge) => {
+          if (edge.hidden || !visibleNodeIds.has(idKey(edgeSource(edge))) || !visibleNodeIds.has(idKey(edgeTarget(edge)))) {
+            return;
+          }
+          const source = positions[edgeSource(edge)];
+          const target = positions[edgeTarget(edge)];
+          if (!source || !target) {
+            return;
+          }
+          context.beginPath();
+          context.moveTo(source.x, source.y);
+          context.lineTo(target.x, target.y);
+          context.strokeStyle = 'rgba(126, 231, 203, 0.82)';
+          context.lineWidth = 2.2;
+          context.shadowColor = 'rgba(126, 231, 203, 0.72)';
+          context.shadowBlur = 10;
+          context.stroke();
+        });
+        highlight.nodeIds.forEach((nodeId) => {
+          const point = positions[nodeId];
+          if (!point) {
+            return;
+          }
+          context.beginPath();
+          context.arc(point.x, point.y, 20, 0, Math.PI * 2);
+          context.fillStyle = 'rgba(126, 231, 203, 0.13)';
+          context.fill();
+          context.beginPath();
+          context.arc(point.x, point.y, 15, 0, Math.PI * 2);
+          context.strokeStyle = 'rgba(154, 246, 219, 0.96)';
+          context.lineWidth = 2;
+          context.stroke();
+        });
+        context.restore();
+      });
     }
 
     function clearTransientVisualStyle() {
@@ -1394,8 +1749,10 @@
       if (!state || !nodesDataSet || !edgesDataSet) {
         return;
       }
+      root.__brainBarSearchRevealRestore = null;
       clearTransientVisualStyle();
       root.__brainBarFocusState = null;
+      root.__brainBarFocusedCommunityId = null;
       root.__brainBarActiveGraphView = 'global';
       setLensEmptyMessage('');
       restoreFocusLayout();
@@ -1661,11 +2018,65 @@
         .slice(0, limit);
     }
 
+    function hiddenSearchResultReason2D(node) {
+      const snapshot = currentGraphSnapshot();
+      const current = nodeById(snapshot.currentNodes, node.id);
+      if (!current?.hidden) {
+        return '';
+      }
+      const lens = normalizeLens(root.__brainBarPendingGraphLens || ALL_LENS);
+      if (lens !== ALL_LENS) {
+        const lensState = computeLensDiff({
+          lens,
+          originalNodes: snapshot.nodes,
+          originalEdges: snapshot.edges,
+          graphLinks: snapshot.state.graphLinks || [],
+          currentNodes: snapshot.nodes,
+          currentEdges: snapshot.edges
+        });
+        if (!new Set(lensState.visibleNodeIds.map(idKey)).has(idKey(node.id))) {
+          return `Hidden by ${lens === OBSIDIAN_LENS ? 'Wikilinks' : 'Graphify'} Source Lens · reveal temporarily`;
+        }
+      }
+      if (root.__brainBarFocusedCommunityId && String(node.community || '') !== String(root.__brainBarFocusedCommunityId)) {
+        return `Hidden by community ${root.__brainBarFocusedCommunityId} · reveal temporarily`;
+      }
+      const activeView = String(root.__brainBarActiveGraphView || 'global');
+      return `Hidden by ${activeView === 'global' ? 'the current graph view' : `${activeView} view`} · reveal temporarily`;
+    }
+
+    function restore2DSearchReveal() {
+      const restore = root.__brainBarSearchRevealRestore;
+      if (!restore) {
+        return false;
+      }
+      root.__brainBarSearchRevealRestore = null;
+      applyDataSetUpdates(restore.nodes, restore.edges);
+      root.__brainBarActiveGraphView = restore.activeView;
+      root.__brainBarFocusState = restore.focusState;
+      root.__brainBarFocusedCommunityId = restore.communityID;
+      graphNetwork()?.selectNodes(restore.selectedNodeIDs || []);
+      updateWorkflowToolbarState();
+      graphNetwork()?.redraw();
+      return true;
+    }
+
     function reveal2DSearchNode(nodeId) {
       const node = nodeForRuntimeAction(nodeId);
       if (!node?.id) {
         return;
       }
+      restore2DSearchReveal();
+      const snapshot = currentGraphSnapshot();
+      root.__brainBarSearchRevealRestore = {
+        nodes: snapshot.currentNodes.map((item) => ({ id: item.id, hidden: Boolean(item.hidden) })),
+        edges: snapshot.currentEdges.map((item) => ({ id: item.id, hidden: Boolean(item.hidden) })),
+        activeView: root.__brainBarActiveGraphView || 'global',
+        focusState: root.__brainBarFocusState || null,
+        communityID: root.__brainBarFocusedCommunityId || null,
+        selectedNodeIDs: graphNetwork()?.getSelectedNodes?.() || []
+      };
+      applyDataSetUpdates([{ id: node.id, hidden: false }], []);
       root.__brainBarActiveGraphView = 'search';
       graphNetwork()?.selectNodes([node.id]);
       const neighbors = topVisibleNeighbors(node.id, 12).map((neighbor) => neighbor.id);
@@ -1690,7 +2101,10 @@
         title: 'Revealed from search',
         body: `${nodeDisplayLabel(node, node.id)} · ${neighbors.length} visible neighbors.`,
         count: neighbors.length,
-        empty: 'No visible neighbors in the current lens or community filter.'
+        empty: 'No visible neighbors in the current lens or community filter.',
+        showAllLabel: 'Return to filters',
+        onShowAll: restore2DSearchReveal,
+        onClose: restore2DSearchReveal
       };
       showWorkflowViewPanel(meta, [node.id, ...neighbors.map((neighbor) => neighbor.id)]);
     }
@@ -1724,7 +2138,8 @@
           const title = root.document.createElement('span');
           title.textContent = match.label;
           const path = root.document.createElement('small');
-          path.textContent = match.sourceFile || 'Visible node';
+          const node = nodeById(currentGraphSnapshot().nodes, match.id);
+          path.textContent = hiddenSearchResultReason2D(node) || match.sourceFile || 'Visible in the current graph';
           button.append(title, path);
           results.appendChild(button);
         });
@@ -1970,6 +2385,7 @@
       close.className = 'close';
       close.textContent = 'Close';
       close.addEventListener('click', () => {
+        meta.onClose?.();
         panel.hidden = true;
       });
       const title = root.document.createElement('h2');
@@ -1992,9 +2408,13 @@
       });
       const showAll = root.document.createElement('button');
       showAll.type = 'button';
-      showAll.textContent = 'Show all';
+      showAll.textContent = meta.showAllLabel || 'Show all';
       showAll.addEventListener('click', () => {
-        clearRuntimeFilter();
+        if (typeof meta.onShowAll === 'function') {
+          meta.onShowAll();
+        } else {
+          clearRuntimeFilter();
+        }
         panel.hidden = true;
       });
       actions.append(focusFirst, showAll);
@@ -2112,6 +2532,7 @@
       focus.type = 'button';
       focus.textContent = 'Focus community';
       focus.addEventListener('click', () => {
+        root.__brainBarFocusedCommunityId = String(group.id || group.label || '');
         applyNodeSetView('groups', group.nodeIds);
         panel.hidden = true;
       });
@@ -2193,10 +2614,76 @@
       const summary = root.document.createElement('p');
       summary.textContent = `Read-only check: ${health.counts.nodes} notes, ${health.counts.edges} links, ${health.counts.components} connected groups.`;
       panel.append(close, title, summary);
+      appendEvidenceGraphCheck(panel);
       graphCheckSections(health, { nodes: currentGraphSnapshot().nodes }).forEach((section) => {
         appendGraphCheckSection(panel, section);
       });
       panel.hidden = false;
+    }
+
+    function appendEvidenceGraphCheck(panel) {
+      try {
+        const report = graphEvidenceSnapshot();
+        if (!report) {
+          return;
+        }
+      const rules = root.document.createElement('section');
+      rules.className = 'brainbar-evidence-health';
+      const heading = root.document.createElement('h3');
+      heading.textContent = 'Deterministic proposals';
+      const version = root.document.createElement('p');
+      version.textContent = `Evidence schema ${report.schemaVersion} · rules ${report.rulesVersion}. Read-only; review caveats before acting.`;
+      rules.append(heading, version);
+      (report.caveats || []).forEach((caveat) => {
+        const item = root.document.createElement('p');
+        item.className = 'brainbar-evidence-caveat';
+        item.textContent = caveat;
+        rules.appendChild(item);
+      });
+      const proposals = report.proposals || [];
+      const visibleProposals = proposals.slice(0, 100);
+      if (proposals.length > visibleProposals.length) {
+        const count = root.document.createElement('p');
+        count.className = 'brainbar-evidence-caveat';
+        count.textContent = `Showing ${visibleProposals.length} of ${proposals.length} proposals.`;
+        rules.appendChild(count);
+      }
+      if (!proposals.length) {
+        const empty = root.document.createElement('p');
+        empty.className = 'empty';
+        empty.textContent = 'No deterministic proposals.';
+        rules.appendChild(empty);
+      }
+      visibleProposals.forEach((proposal) => {
+        const item = root.document.createElement('article');
+        item.className = 'brainbar-evidence-proposal';
+        const title = root.document.createElement('strong');
+        title.textContent = `${proposal.severity || 'info'} · ${proposal.category || proposal.rule?.id || 'proposal'}`;
+        const evidence = root.document.createElement('p');
+        evidence.textContent = evidenceValueText(proposal.evidence);
+        const threshold = root.document.createElement('p');
+        threshold.textContent = `Rule ${proposal.rule?.id || 'unknown'} v${proposal.rule?.version || report.rulesVersion} · threshold: ${evidenceValueText(proposal.threshold?.rule)}`;
+        const caveat = root.document.createElement('p');
+        caveat.className = 'brainbar-evidence-caveat';
+        caveat.textContent = `Caveat: ${evidenceValueText(proposal.threshold?.caveat)}`;
+        const subject = root.document.createElement('p');
+        subject.textContent = proposalSubjectText(proposal);
+        const preview = root.document.createElement('pre');
+        preview.textContent = proposal.preview?.text || '';
+        const copy = root.document.createElement('button');
+        copy.type = 'button';
+        copy.textContent = 'Copy instruction';
+        copy.disabled = !proposal.preview?.text;
+        copy.addEventListener('click', () => {
+          root.navigator?.clipboard?.writeText(proposal.preview.text);
+        });
+        item.append(title, evidence, threshold, caveat, subject, preview, copy);
+        rules.appendChild(item);
+      });
+        panel.appendChild(rules);
+      } catch (error) {
+        root.__brainBarGraphEvidenceError = String(error?.message || error);
+      }
     }
 
     function graphCheckItemNodeIds(section, item) {
@@ -2792,6 +3279,99 @@
       }
     }
 
+    function graphSessionSnapshot2D() {
+      const pending = root.__brainBarPendingSessionState || {};
+      // 2D does not render these presentation fields, but must round-trip them
+      // verbatim so changing workbench never resets the 3D composition.
+      const presentation = Number(pending.schemaVersion) === 2 ? {
+        detailLevel: pending.detailLevel,
+        detailReason: pending.detailReason,
+        sidebarState: pending.sidebarState,
+        sidebarWidth: pending.sidebarWidth,
+        cameraPreset: pending.cameraPreset,
+        cameraHistory: Array.isArray(pending.cameraHistory) ? pending.cameraHistory : [],
+        reduceMotion: Boolean(pending.reduceMotion)
+      } : {};
+      const focus = root.__brainBarFocusState;
+      const network = graphNetwork();
+      const selectedNodeId = network?.getSelectedNodes?.()?.[0];
+      const activeMode = String(root.__brainBarActiveGraphView || 'global');
+      return {
+        ...presentation,
+        schemaVersion: Number(pending.schemaVersion) === 2 ? 2 : 1,
+        graphVersion: pending.graphVersion || null,
+        selectedNodeID: network
+          ? (selectedNodeId != null ? String(selectedNodeId) : (activeMode === 'global' ? null : (pending.selectedNodeID || null)))
+          : (pending.selectedNodeID || null),
+        sourceLens: normalizeLens(root.__brainBarPendingGraphLens || pending.sourceLens || ALL_LENS),
+        focusDepth: focus?.centerNodeId
+          ? Number(focus.depth || 1)
+          : (activeMode === 'global' ? null : (pending.focusDepth || null)),
+        path: pending.path || null,
+        communityID: root.__brainBarFocusedCommunityId || pending.communityID || null,
+        searchQuery: String(root.document.getElementById('search')?.value || pending.searchQuery || ''),
+        cameraState: pending.cameraState || null
+      };
+    }
+
+    function emitGraphSessionState2D() {
+      const snapshot = graphSessionSnapshot2D();
+      root.__brainBarPendingSessionState = snapshot;
+      root.webkit?.messageHandlers?.brainBarGraphSession?.postMessage(snapshot);
+    }
+
+    function scheduleGraphSessionState2D() {
+      root.clearTimeout(root.__brainBarGraphSessionTimer);
+      root.__brainBarGraphSessionTimer = root.setTimeout(emitGraphSessionState2D, 0);
+    }
+
+    function installGraphSessionBridge2D() {
+      if (root.__brainBarGraphSessionBridgeInstalled) {
+        return;
+      }
+      root.__brainBarGraphSessionBridgeInstalled = true;
+      root.document.addEventListener('click', scheduleGraphSessionState2D);
+      root.document.addEventListener('input', scheduleGraphSessionState2D);
+      root.document.addEventListener('change', scheduleGraphSessionState2D);
+      graphNetwork()?.on?.('selectNode', scheduleGraphSessionState2D);
+      graphNetwork()?.on?.('deselectNode', scheduleGraphSessionState2D);
+    }
+
+    root.brainBarApplyGraphSessionState = (value) => {
+      const schemaVersion = Number(value?.schemaVersion);
+      const session = value && typeof value === 'object' && (schemaVersion === 1 || schemaVersion === 2)
+        ? { ...value, schemaVersion }
+        : null;
+      if (!session) {
+        return false;
+      }
+      root.__brainBarPendingSessionState = session;
+      const search = root.document.getElementById('search');
+      if (search && search.value !== String(session.searchQuery || '')) {
+        search.value = String(session.searchQuery || '');
+        search.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+      const snapshot = currentGraphSnapshot();
+      if (session.communityID) {
+        const group = communitySummaries({ nodes: snapshot.nodes, edges: snapshot.edges })
+          .find((candidate) => String(candidate.id) === String(session.communityID)
+            || String(candidate.label) === String(session.communityID));
+        if (group) {
+          root.__brainBarFocusedCommunityId = String(group.id || group.label || '');
+          applyNodeSetView('groups', group.nodeIds);
+        }
+      } else if (session.selectedNodeID && session.focusDepth) {
+        applyFocus(session.selectedNodeID, Number(session.focusDepth));
+      } else if (session.selectedNodeID && nodeForRuntimeAction(session.selectedNodeID)) {
+        graphNetwork()?.selectNodes([session.selectedNodeID]);
+        addOpenNoteButton(session.selectedNodeID);
+      }
+      scheduleGraphSessionState2D();
+      return true;
+    };
+
+    root.brainBarGraphSessionSnapshot = graphSessionSnapshot2D;
+
     root.brainBarApplyGraphLens = (lens) => {
       applyNetworkTheme();
       rebuildEmptyCommunityLegend();
@@ -2801,6 +3381,7 @@
       installNodeActionBridge();
       installPremium2DInteraction();
       ensureOpenNoteButton();
+      installGraphSessionBridge2D();
 
       const state = ensureGraphLensState();
       if (!state) {
@@ -2808,6 +3389,7 @@
       }
 
       const selectedLens = normalizeLens(lens || root.__brainBarPendingGraphLens || ALL_LENS);
+      root.__brainBarSearchRevealRestore = null;
       root.__brainBarPendingGraphLens = selectedLens;
       const nodesDataSet = graphNodesDS();
       const edgesDataSet = graphEdgesDS();
@@ -2836,7 +3418,36 @@
       if (currentNetwork) {
         currentNetwork.redraw();
       }
+      const search = root.document.getElementById('search');
+      search?.dispatchEvent(new Event('input', { bubbles: true }));
       updateWorkflowToolbarState();
+      scheduleGraphSessionState2D();
+    };
+
+    root.brainBarRendererDiagnostics2D = () => {
+      const snapshot = currentGraphSnapshot();
+      // Non-hidden DataSet items are the set submitted to vis-network for painting.
+      const submittedNodes = snapshot.currentNodes.filter((node) => !node.hidden);
+      const submittedEdges = snapshot.currentEdges.filter((edge) => !edge.hidden);
+      const selectedNodes = graphNetwork()?.getSelectedNodes?.() || [];
+      const searchResults = root.document.querySelectorAll('#brainbar-search-results .brainbar-search-result');
+      const workflowHighlight = currentWorkflowHighlight();
+      return {
+        activeMode: String(root.__brainBarActiveGraphView || 'global'),
+        lens: normalizeLens(root.__brainBarPendingGraphLens || ALL_LENS),
+        queryableNodes: snapshot.nodes.length,
+        queryableEdges: snapshot.edges.length,
+        visibleNodes: submittedNodes.length,
+        visibleEdges: submittedEdges.length,
+        paintedNodes: submittedNodes.length,
+        paintedEdges: submittedEdges.length,
+        paintedCountsSettled: true,
+        selectedNodeCount: selectedNodes.length,
+        searchResultCount: searchResults.length,
+        networkAvailable: Boolean(graphNetwork())
+        , workflowHighlightNodeCount: workflowHighlight.nodeIds.length
+        , workflowHighlightPendingPathCount: workflowHighlight.pendingPaths.length
+      };
     };
 
     root.brainBarApplyReviewQueueTargets = (targets) => {
@@ -2848,11 +3459,18 @@
     };
 
     root.brainBarApplyAgentActivity2D = (snapshot) => {
-      root.__brainBarAgentActivitySnapshot = snapshot && typeof snapshot === 'object' ? snapshot : {};
+      root.__brainBarAgentActivitySnapshot = normalizeAgentActivitySnapshot(snapshot);
       updateWorkflowToolbarState();
       if (String(root.__brainBarActiveGraphView || '').toLowerCase() === 'agent') {
         applyBuiltInView('agent');
       }
+      graphNetwork()?.redraw();
+    };
+
+    root.brainBarApplyWorkflowHighlight2D = (workflowID) => {
+      root.__brainBarWorkflowHighlightID = String(workflowID || '');
+      installWorkflowHighlightOverlay();
+      graphNetwork()?.redraw();
     };
 
     root.brainBarShowGraphHealth = () => {
@@ -2868,6 +3486,8 @@
       installNodeActionBridge();
       installPremium2DInteraction();
       ensureOpenNoteButton();
+      installGraphSessionBridge2D();
+      installWorkflowHighlightOverlay();
       const currentNetwork = graphNetwork();
       const selectedNodeId = currentNetwork ? currentNetwork.getSelectedNodes()?.[0] : null;
       if (selectedNodeId) {
@@ -2912,6 +3532,8 @@
     search2DNodes,
     visibleNodeIdSet,
     workflowViewState,
+    workflowHighlightState,
+    normalizeAgentActivitySnapshot,
     sourceFileForNode
   };
 

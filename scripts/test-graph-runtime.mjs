@@ -4,6 +4,7 @@ import { createRequire } from 'node:module';
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import vm from 'node:vm';
 
 const require = createRequire(import.meta.url);
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
@@ -14,7 +15,360 @@ const graph3dPolish = await import(pathToFileURL(join(root, 'BrainBar/Resources/
 const graph3dRecent = await import(pathToFileURL(join(root, 'BrainBar/Resources/Graph3D/graph3d-recent-utils.mjs')));
 const graph3dSearch = await import(pathToFileURL(join(root, 'BrainBar/Resources/Graph3D/graph3d-search-utils.mjs')));
 const graph3dStory = await import(pathToFileURL(join(root, 'BrainBar/Resources/Graph3D/graph3d-story-utils.mjs')));
+const graph3dLayout = await import(pathToFileURL(join(root, 'BrainBar/Resources/Graph3D/graph3d-layout-utils.mjs')));
+const graph3dLayoutCache = await import(pathToFileURL(join(root, 'BrainBar/Resources/Graph3D/graph3d-layout-cache.mjs')));
+const graph3dPresentation = await import(pathToFileURL(join(root, 'BrainBar/Resources/Graph3D/graph3d-presentation-utils.mjs')));
 const fixture = JSON.parse(readFileSync(join(root, 'BrainBarTests/Fixtures/graph-runtime-fixture.json'), 'utf8'));
+const graph3dSource = readFileSync(join(root, 'BrainBar/Resources/Graph3D/graph3d.js'), 'utf8');
+const graph2dSource = readFileSync(join(root, 'BrainBar/Resources/Graph2D/brainbar-graph-runtime.js'), 'utf8');
+
+function graph3dNamedFunctionSource(name) {
+  const start = graph3dSource.indexOf(`function ${name}(`);
+  assert.notEqual(start, -1, `Missing Graph3D function: ${name}`);
+  const end = graph3dSource.indexOf('\nfunction ', start + 1);
+  return graph3dSource.slice(start, end === -1 ? graph3dSource.length : end);
+}
+
+assert.ok(graph2dSource.includes('brainBarApplyGraphSessionState'));
+assert.ok(graph2dSource.includes('brainBarGraphSessionSnapshot'));
+assert.ok(graph3dSource.includes('brainBarApplyGraphSessionState'));
+assert.ok(graph3dSource.includes('brainBarGraphSessionSnapshot'));
+
+const graph3dNormalizationSource = graph3dSource.match(/function normalizeGraph\(payload\) \{[\s\S]*?\nfunction prepareCommunities/);
+assert.ok(graph3dNormalizationSource);
+const graph3dNormalizationContext = {};
+vm.runInNewContext(
+  `${graph3dNormalizationSource[0].replace(/\nfunction prepareCommunities$/, '')}\nglobalThis.normalizeFixtureGraph = normalizeGraph;`,
+  graph3dNormalizationContext
+);
+const normalizeFixtureGraph = graph3dNormalizationContext.normalizeFixtureGraph;
+
+const idlessGraph = {
+  nodes: [
+    { id: 'node-a', label: 'A', community: 'One' },
+    { id: 'node-b', label: 'B', community: 'One' }
+  ],
+  edges: [
+    { from: 'node-a', to: 'node-b', relation: 'linked', source_file: 'Notes/A.md', confidence: 0.9 },
+    { from: 'node-a', to: 'node-b', relation: 'linked', source_file: 'Notes/A.md', confidence: 0.9 },
+    { source: 'node-b', target: 'node-a', context: 'linked', source_location: '12:4' }
+  ]
+};
+const reversedIdlessGraph = {
+  nodes: [...idlessGraph.nodes].reverse(),
+  edges: [...idlessGraph.edges].reverse()
+};
+const normalizedIdlessGraph = normalizeFixtureGraph(idlessGraph);
+const reorderedNormalizedIdlessGraph = normalizeFixtureGraph(reversedIdlessGraph);
+const normalizedEdgeIdentities = (graph) => graph.edges
+  .map((edge) => JSON.stringify([edge.id, edge.source, edge.target, edge.relation]))
+  .sort();
+assert.equal(normalizedIdlessGraph.edges.length, 3);
+assert.equal(new Set(normalizedIdlessGraph.edges.map((edge) => edge.id)).size, 3);
+assert.deepEqual(normalizedEdgeIdentities(normalizedIdlessGraph), normalizedEdgeIdentities(reorderedNormalizedIdlessGraph));
+assert.deepEqual(
+  normalizedIdlessGraph.edges.map((edge) => edge.id).filter((id) => id.startsWith('edge:')).sort(),
+  reorderedNormalizedIdlessGraph.edges.map((edge) => edge.id).filter((id) => id.startsWith('edge:')).sort()
+);
+
+const collisionAndLabelGraph = {
+  nodes: idlessGraph.nodes,
+  edges: [
+    { from: 'node-a', to: 'node-b', relation: 'linked', source_file: 'yqgj2ye3a2b5' },
+    { from: 'node-a', to: 'node-b', relation: 'linked', source_file: 'pmkx2sxy62bn' },
+    { from: 'node-a', to: 'node-b', relation: 'linked', label: 'first', details: { z: 2, a: [true, 'x'] } },
+    { from: 'node-a', to: 'node-b', relation: 'linked', title: 'second', details: { a: [true, 'x'], z: 2 } }
+  ]
+};
+const reorderedCollisionAndLabelGraph = {
+  nodes: [...collisionAndLabelGraph.nodes].reverse(),
+  edges: [...collisionAndLabelGraph.edges].reverse()
+};
+const normalizedCollisionAndLabelGraph = normalizeFixtureGraph(collisionAndLabelGraph);
+const reorderedCollisionAndLabelGraphNormalized = normalizeFixtureGraph(reorderedCollisionAndLabelGraph);
+const edgeIDsBySemanticLabel = (graph) => new Map(graph.edges.map((edge) => [
+  edge.source_file ?? edge.label ?? edge.title,
+  edge.id
+]));
+const firstSemanticIDs = edgeIDsBySemanticLabel(normalizedCollisionAndLabelGraph);
+const reorderedSemanticIDs = edgeIDsBySemanticLabel(reorderedCollisionAndLabelGraphNormalized);
+assert.notEqual(firstSemanticIDs.get('yqgj2ye3a2b5'), firstSemanticIDs.get('pmkx2sxy62bn'));
+assert.notEqual(firstSemanticIDs.get('first'), firstSemanticIDs.get('second'));
+assert.deepEqual([...firstSemanticIDs.entries()].sort(), [...reorderedSemanticIDs.entries()].sort());
+
+const derivedID = normalizeFixtureGraph({
+  nodes: idlessGraph.nodes,
+  edges: [{ from: 'node-a', to: 'node-b', relation: 'linked', label: 'collision' }]
+}).edges[0].id;
+const explicitDerivedCollisionGraph = {
+  nodes: idlessGraph.nodes,
+  edges: [
+    { from: 'node-a', to: 'node-b', relation: 'linked', label: 'collision' },
+    { id: derivedID, from: 'node-b', to: 'node-a', relation: 'explicit-collision' }
+  ]
+};
+const reorderedExplicitDerivedCollisionGraph = {
+  nodes: [...explicitDerivedCollisionGraph.nodes].reverse(),
+  edges: [...explicitDerivedCollisionGraph.edges].reverse()
+};
+const normalizedExplicitDerivedCollision = normalizeFixtureGraph(explicitDerivedCollisionGraph);
+const reorderedExplicitDerivedCollision = normalizeFixtureGraph(reorderedExplicitDerivedCollisionGraph);
+const collisionIDs = normalizedExplicitDerivedCollision.edges.map((edge) => edge.id).sort();
+assert.equal(new Set(collisionIDs).size, 2);
+assert.ok(collisionIDs.includes(derivedID));
+assert.ok(collisionIDs.includes(`${derivedID}:derived-1`));
+assert.deepEqual(collisionIDs, reorderedExplicitDerivedCollision.edges.map((edge) => edge.id).sort());
+
+const contextIdentityGraph = {
+  nodes: idlessGraph.nodes,
+  edges: [
+    { from: 'node-a', to: 'node-b', relation: 'linked', context: 'obsidian_wikilink' },
+    { from: 'node-a', to: 'node-b', relation: 'linked', context: 'semantic_similarity' }
+  ]
+};
+const reorderedContextIdentityGraph = {
+  nodes: [...contextIdentityGraph.nodes].reverse(),
+  edges: [...contextIdentityGraph.edges].reverse()
+};
+const contextIDs = (graph) => new Map(graph.edges.map((edge) => [edge.context, edge.id]));
+const firstContextIDs = contextIDs(normalizeFixtureGraph(contextIdentityGraph));
+const reorderedContextIDs = contextIDs(normalizeFixtureGraph(reorderedContextIdentityGraph));
+assert.notEqual(firstContextIDs.get('obsidian_wikilink'), firstContextIDs.get('semantic_similarity'));
+assert.deepEqual([...firstContextIDs.entries()].sort(), [...reorderedContextIDs.entries()].sort());
+
+const explicitIdGraph = normalizeFixtureGraph({
+  nodes: idlessGraph.nodes,
+  links: [
+    { id: 'explicit-edge', source: 'node-a', target: 'node-b', type: 'linked' },
+    { id: 7, source: 'node-b', target: 'node-a', type: 'linked' }
+  ]
+});
+assert.deepEqual(explicitIdGraph.edges.map((edge) => edge.id), ['explicit-edge', '7']);
+assert.ok(graph3dSource.includes('canonicalEdgeValue'));
+assert.ok(!graph3dSource.includes('normalizedEdgeIdentityHash'));
+assert.ok(graph3dSource.includes('generation: state.graphGeneration'));
+
+function positionsFor(nodes, positionFor) {
+  return new Map(nodes.map((node, index) => [node.id, positionFor(node, index)]));
+}
+
+function minimumCommunityDistance(nodesByCommunity, positions) {
+  let minimum = Infinity;
+  nodesByCommunity.forEach((nodes) => {
+    for (let leftIndex = 0; leftIndex < nodes.length; leftIndex += 1) {
+      for (let rightIndex = leftIndex + 1; rightIndex < nodes.length; rightIndex += 1) {
+        const left = positions.get(nodes[leftIndex].id);
+        const right = positions.get(nodes[rightIndex].id);
+        minimum = Math.min(minimum, Math.hypot(right.x - left.x, right.z - left.z));
+      }
+    }
+  });
+  return minimum;
+}
+
+const layoutNodes = Array.from({ length: 16 }, (_, index) => ({ id: `layout-${index}` }));
+const layoutCommunities = new Map([['A', layoutNodes]]);
+const layoutPositions = positionsFor(layoutNodes, (_, index) => ({
+  x: (index % 4) * 2,
+  y: index,
+  z: Math.floor(index / 4) * 2
+}));
+graph3dLayout.separateLocalNodesByGrid({ nodesByCommunity: layoutCommunities, positions: layoutPositions });
+assert.ok(minimumCommunityDistance(layoutCommunities, layoutPositions) >= 13 - 1e-6);
+assert.ok([...layoutPositions.values()].every((position) => (
+  Number.isFinite(position.x) && Number.isFinite(position.y) && Number.isFinite(position.z)
+)));
+
+const deterministicPositions = () => positionsFor(layoutNodes, (_, index) => ({
+  x: (index % 4) * 2,
+  y: index,
+  z: Math.floor(index / 4) * 2
+}));
+const firstLayout = deterministicPositions();
+const secondLayout = deterministicPositions();
+graph3dLayout.separateLocalNodesByGrid({ nodesByCommunity: layoutCommunities, positions: firstLayout });
+graph3dLayout.separateLocalNodesByGrid({ nodesByCommunity: layoutCommunities, positions: secondLayout });
+assert.deepEqual([...firstLayout.entries()], [...secondLayout.entries()]);
+
+const workerLayoutNodes = [
+  { id: 'worker-a', label: 'Alpha', community: 'Community North' },
+  { id: 'worker-b', label: 'Beta', community: 'Community North' },
+  { id: 'worker-c', label: 'Gamma', community: 'Community South' },
+  { id: 'worker-d', label: 'Delta', community: 'Community South' }
+];
+const workerLayoutEdges = [
+  { source: 'worker-a', target: 'worker-b' },
+  { source: 'worker-b', target: 'worker-c' },
+  { source: 'worker-c', target: 'worker-d' }
+];
+const firstWorkerLayout = graph3dLayout.computeDeterministicGraphLayout({
+  nodes: workerLayoutNodes,
+  edges: workerLayoutEdges
+});
+const secondWorkerLayout = graph3dLayout.computeDeterministicGraphLayout({
+  nodes: workerLayoutNodes,
+  edges: workerLayoutEdges
+});
+assert.deepEqual(firstWorkerLayout.nodeIds, workerLayoutNodes.map((node) => node.id));
+assert.deepEqual([...firstWorkerLayout.positions], [...secondWorkerLayout.positions]);
+assert.ok([...firstWorkerLayout.positions].every(Number.isFinite));
+assert.notEqual(firstWorkerLayout.positions[1], firstWorkerLayout.positions[4]);
+assert.throws(
+  () => graph3dLayout.computeDeterministicGraphLayout({
+    nodes: [{ id: 'missing-label', community: 'Community Invalid' }],
+    edges: []
+  }),
+  /Invalid graph layout input/
+);
+
+const layoutCacheDigest = 'a'.repeat(64);
+const layoutCacheCoordinates = new Float64Array([1.5, -2, 3.25, 4, 5.5, -6]);
+const layoutCacheMetadata = {
+  communityCount: 1,
+  communityIndexByNode: new Uint32Array([0, 0]).buffer,
+  communityCenters: new Float64Array([0, 0, 0]).buffer,
+  communityBounds: new Float64Array([-10, 10, -10, 10, -10, 10]).buffer,
+  structuralRanks: new Uint32Array([0, 1]).buffer
+};
+const validLayoutCacheRecord = graph3dLayoutCache.layoutCacheRecord({
+  digest: layoutCacheDigest,
+  lens: 'unexpected-lens',
+  nodeCount: 2,
+  coordinates: layoutCacheCoordinates.buffer,
+  communityLayout: layoutCacheMetadata
+});
+assert.equal(graph3dLayout.graph3dLayoutSchemaVersion, 4);
+assert.equal(graph3dLayoutCache.layoutCacheSchemaVersion, 4);
+assert.equal(validLayoutCacheRecord.key, `4:${layoutCacheDigest}:all`);
+assert.equal(validLayoutCacheRecord.lens, 'all');
+assert.deepEqual(
+  [...graph3dLayoutCache.validateLayoutCacheRecord(validLayoutCacheRecord, {
+    digest: layoutCacheDigest,
+    lens: 'all',
+    nodeCount: 2
+  })],
+  [...layoutCacheCoordinates]
+);
+assert.equal(
+  graph3dLayoutCache.validateLayoutCacheRecord(
+    { ...validLayoutCacheRecord, schemaVersion: 0 },
+    { digest: layoutCacheDigest, lens: 'all', nodeCount: 2 }
+  ),
+  null
+);
+const nonFiniteCoordinates = new Float64Array([1, 2, 3, 4, NaN, 6]);
+assert.equal(
+  graph3dLayoutCache.layoutCacheRecord({
+    digest: layoutCacheDigest,
+    lens: 'all',
+    nodeCount: 2,
+    coordinates: nonFiniteCoordinates.buffer,
+    communityLayout: layoutCacheMetadata
+  }),
+  null
+);
+assert.equal(
+  graph3dLayoutCache.layoutCacheRecord({
+    digest: layoutCacheDigest,
+    lens: 'all',
+    nodeCount: 2,
+    coordinates: layoutCacheCoordinates.buffer
+  }),
+  null,
+  'schema 2 cache never accepts coordinates without community metadata'
+);
+assert.equal(
+  graph3dLayoutCache.validateLayoutCacheLayout(
+    { ...validLayoutCacheRecord, structuralRanks: new ArrayBuffer(0) },
+    { digest: layoutCacheDigest, lens: 'all', nodeCount: 2 }
+  ),
+  null,
+  'corrupt metadata invalidates the complete cache record'
+);
+assert.equal(
+  graph3dLayoutCache.validateLayoutCacheLayout(
+    { ...validLayoutCacheRecord, communityBounds: new Float64Array([10, -10, -10, 10, -10, 10]).buffer },
+    { digest: layoutCacheDigest, lens: 'all', nodeCount: 2 }
+  ),
+  null,
+  'inverted community bounds invalidate the complete cache record'
+);
+assert.equal(graph3dLayoutCache.layoutCacheKey({ digest: 'not-a-sha', lens: 'all' }), '');
+assert.equal(
+  graph3dLayoutCache.shouldRetainLayoutCacheRecord(
+    { ...validLayoutCacheRecord, schemaVersion: 0, key: `0:${layoutCacheDigest}:all` },
+    layoutCacheDigest
+  ),
+  false
+);
+assert.equal(
+  graph3dLayoutCache.shouldRetainLayoutCacheRecord(validLayoutCacheRecord, layoutCacheDigest),
+  true
+);
+assert.equal(await graph3dLayoutCache.readLayoutCache({ digest: layoutCacheDigest, lens: 'all' }, 2), null);
+assert.equal(await graph3dLayoutCache.writeLayoutCache({ digest: layoutCacheDigest, lens: 'all' }, 2, layoutCacheCoordinates.buffer), false);
+assert.throws(
+  () => graph3dLayout.computeDeterministicGraphLayout({
+    nodes: [{ id: 'only', label: 'Only', community: 'Community One' }],
+    edges: [{ source: 'only', target: 'missing' }]
+  }),
+  /Invalid graph layout input/
+);
+
+const emptyPositions = new Map();
+assert.deepEqual(
+  graph3dLayout.separateLocalNodesByGrid({ nodesByCommunity: new Map(), positions: emptyPositions }),
+  { comparisons: 0, corrections: 0, passes: 0, converged: true, fallbackUsed: false }
+);
+const singleNode = [{ id: 'only' }];
+const singlePositions = positionsFor(singleNode, () => ({ x: 4, y: 2, z: -3 }));
+graph3dLayout.separateLocalNodesByGrid({
+  nodesByCommunity: new Map([['single', singleNode]]),
+  positions: singlePositions
+});
+assert.deepEqual(singlePositions.get('only'), { x: 4, y: 2, z: -3 });
+
+const denseNodes = Array.from({ length: 25 }, (_, index) => ({ id: `dense-${index}` }));
+const denseCommunities = new Map([['dense', denseNodes]]);
+const densePositions = positionsFor(denseNodes, () => ({ x: 0, y: 0, z: 0 }));
+graph3dLayout.separateLocalNodesByGrid({ nodesByCommunity: denseCommunities, positions: densePositions });
+assert.ok(minimumCommunityDistance(denseCommunities, densePositions) >= 13 - 1e-6);
+assert.ok([...densePositions.values()].every((position) => Number.isFinite(position.x) && Number.isFinite(position.z)));
+
+let denseSeed = 70;
+const denseRandom = () => {
+  denseSeed = (Math.imul(denseSeed, 1664525) + 1013904223) >>> 0;
+  return denseSeed / 0x100000000;
+};
+const denseNearCoincidentNodes = Array.from({ length: 300 }, (_, index) => ({ id: `near-${index}` }));
+const denseNearCoincidentCommunities = new Map([['near', denseNearCoincidentNodes]]);
+const denseNearCoincidentPositions = positionsFor(denseNearCoincidentNodes, () => ({
+  x: denseRandom() * 10,
+  y: denseRandom() * 10,
+  z: denseRandom() * 10
+}));
+const denseNearCoincidentResult = graph3dLayout.separateLocalNodesByGrid({
+  nodesByCommunity: denseNearCoincidentCommunities,
+  positions: denseNearCoincidentPositions
+});
+assert.equal(denseNearCoincidentResult.converged, true);
+assert.equal(denseNearCoincidentResult.fallbackUsed, true);
+assert.ok(minimumCommunityDistance(denseNearCoincidentCommunities, denseNearCoincidentPositions) >= 13 - 1e-6);
+assert.ok([...denseNearCoincidentPositions.values()].every((position) => (
+  Number.isFinite(position.x) && Number.isFinite(position.y) && Number.isFinite(position.z)
+)));
+
+const crossCommunityNodes = [{ id: 'a' }, { id: 'b' }];
+const crossCommunityPositions = new Map([
+  ['a', { x: 0, y: 0, z: 0 }],
+  ['b', { x: 0, y: 0, z: 0 }]
+]);
+graph3dLayout.separateLocalNodesByGrid({
+  nodesByCommunity: new Map([['first', [crossCommunityNodes[0]]], ['second', [crossCommunityNodes[1]]]]),
+  positions: crossCommunityPositions
+});
+assert.deepEqual(crossCommunityPositions.get('a'), { x: 0, y: 0, z: 0 });
+assert.deepEqual(crossCommunityPositions.get('b'), { x: 0, y: 0, z: 0 });
 
 const graphLinks = fixture.edges;
 
@@ -234,8 +588,8 @@ assert.equal(storyWithoutOptionalSteps.some((step) => step.id === 'recent'), fal
 assert.equal(storyWithoutOptionalSteps.some((step) => step.id === 'needs-attention'), false);
 
 const searchNodes = [
-  { id: 'memory-protocol', label: 'Memory Protocol', source_file: '05_Sessions/Memory Protocol.md' },
-  { id: 'protocol-memory', label: 'Protocol Memory', source_file: '05_Sessions/Protocol Memory.md' },
+  { id: 'memory-protocol', label: 'Memory Protocol', source_file: '05_Sessions/Memory Protocol.md', type: 'decision', tags: ['memory'], status: 'active', modified_at: '2026-08-08', agent: 'codex' },
+  { id: 'protocol-memory', label: 'Protocol Memory', source_file: '05_Sessions/Protocol Memory.md', type: 'reference', tags: ['memory'], status: 'archived', modified_at: '2026-07-10' },
   { id: 'clip-runner', label: 'Web Clip Runner', source_file: '99_System/Web Clip Runner.md' },
   { id: 'source-only', label: 'Inbox', source_file: '99_System/Memory Protocol Notes.md' }
 ];
@@ -259,6 +613,17 @@ assert.equal(
   }).length,
   20
 );
+assert.deepEqual(
+  graph3dSearch.searchGraphNodes({
+    query: 'type:decision tag:memory status:active source:sessions date:2026-08 agent:codex',
+    nodes: searchNodes
+  }).map((item) => item.id),
+  ['memory-protocol']
+);
+assert.deepEqual(graph3dSearch.parseGraphSearchQuery('type:decision "Memory Protocol"'), {
+  text: 'memory protocol',
+  filters: [{ name: 'type', value: 'decision' }]
+});
 
 assert.equal(runtime.describeWorkflowView('orphans').title, 'Needs Links');
 assert.equal(runtime.describeWorkflowView('hubs').title, 'Key Notes');
@@ -276,7 +641,13 @@ const search2DMatches = runtime.search2DNodes({
   visibleNodeIds: new Set(['a', 'b', 'c']),
   limit: 20
 });
-assert.deepEqual(search2DMatches.map((item) => item.id), ['b', 'c', 'a']);
+assert.deepEqual(search2DMatches.map((item) => item.id), ['b', 'hidden', 'c', 'a']);
+assert.equal(search2DMatches.find((item) => item.id === 'hidden')?.hidden, true);
+assert.deepEqual(runtime.search2DNodes({
+  query: 'type:decision tag:memory status:active source:sessions date:2026-08 agent:codex',
+  nodes: searchNodes,
+  visibleNodeIds: new Set(['protocol-memory'])
+}).map((item) => [item.id, item.hidden]), [['memory-protocol', true]]);
 assert.equal(runtime.search2DNodes({
   query: 'node',
   nodes: Array.from({ length: 30 }, (_, index) => ({ id: `node-${index}`, label: `Node ${index}` })),
@@ -438,6 +809,65 @@ const hubWorkflowState = runtime.workflowViewState({
 assert.equal(hubWorkflowState.hubs.count, 1);
 assert.equal(hubWorkflowState.review.hidden, false);
 
+const workflowActivitySnapshot = {
+  events: [{
+    id: 'event-workflow-a',
+    version: 2,
+    action: 'write',
+    agent: 'codex',
+    path: 'Notes/Output.md',
+    timestamp: '2026-08-08T09:00:00Z',
+    nodeId: 'node-a',
+    pending: false,
+    sessionId: 'session-42',
+    project: 'BrainBar',
+    source: 'agent',
+    reason: 'render proof',
+    status: 'completed',
+    workflowId: 'workflow-42',
+    workflowTitle: 'Render proof',
+    pathRole: 'output'
+  }],
+  pendingPaths: ['Notes/Pending.md'],
+  workflows: [{
+    id: 'workflow:workflow-42',
+    workflowId: 'workflow-42',
+    nodeIds: ['node-a'],
+    pendingPaths: ['Notes/Pending.md'],
+    trail: [{ id: 'event-workflow-a' }]
+  }]
+};
+const normalizedWorkflowActivity = runtime.normalizeAgentActivitySnapshot(workflowActivitySnapshot);
+assert.equal(normalizedWorkflowActivity.events[0].version, 2);
+assert.equal(normalizedWorkflowActivity.events[0].sessionId, 'session-42');
+assert.equal(normalizedWorkflowActivity.events[0].project, 'BrainBar');
+assert.equal(normalizedWorkflowActivity.events[0].source, 'agent');
+assert.equal(normalizedWorkflowActivity.events[0].reason, 'render proof');
+assert.equal(normalizedWorkflowActivity.events[0].status, 'completed');
+assert.equal(normalizedWorkflowActivity.events[0].workflowId, 'workflow-42');
+assert.equal(normalizedWorkflowActivity.events[0].workflowTitle, 'Render proof');
+assert.equal(normalizedWorkflowActivity.events[0].pathRole, 'output');
+const activeModesBeforeWorkflowHighlight = {
+  search: 'Beacon', focus: 'node-b', path: 'node-a->node-c', recentOrbit: 'node-d', story: 'story-1', community: 'Community One'
+};
+const workflowHighlight = runtime.workflowHighlightState(
+  normalizedWorkflowActivity,
+  'workflow:workflow-42',
+  ['node-a', 'node-b']
+);
+assert.deepEqual(workflowHighlight, {
+  workflowID: 'workflow:workflow-42',
+  nodeIds: ['node-a'],
+  pendingPaths: ['Notes/Pending.md']
+});
+assert.deepEqual(activeModesBeforeWorkflowHighlight, {
+  search: 'Beacon', focus: 'node-b', path: 'node-a->node-c', recentOrbit: 'node-d', story: 'story-1', community: 'Community One'
+});
+assert.deepEqual(
+  runtime.workflowHighlightState(normalizedWorkflowActivity, '', ['node-a']),
+  { workflowID: '', nodeIds: [], pendingPaths: [] }
+);
+
 const pathNodes = ['a', 'b', 'c', 'd'].map((id) => ({ id }));
 const pathEdges = [
   { id: 'ab', source: 'a', target: 'b' },
@@ -572,7 +1002,46 @@ assert.equal(sparseExplanation.summary, 'BrainBar can trace this route, but the 
 assert.ok(sparseExplanation.badges.includes('1 Unknown'));
 assert.ok(sparseExplanation.caveat.includes('metadata is unavailable'));
 
-const graph3dSource = readFileSync(join(root, 'BrainBar/Resources/Graph3D/graph3d.js'), 'utf8');
+const graph3dWorkerPath = join(root, 'BrainBar/Resources/Graph3D/graph3d-layout-worker.mjs');
+const graph3dCachePath = join(root, 'BrainBar/Resources/Graph3D/graph3d-layout-cache.mjs');
+const graph3dWorkerSource = readFileSync(graph3dWorkerPath, 'utf8');
+const graph3dCacheSource = readFileSync(graph3dCachePath, 'utf8');
+assert.equal(existsSync(graph3dWorkerPath), true);
+assert.equal(existsSync(graph3dCachePath), true);
+assert.doesNotMatch(graph3dCacheSource, /\b(label|nodeId|sourceFile|payload)\b/i);
+assert.match(graph3dSource, /new Worker\(new URL\('\.\/graph3d-layout-worker\.mjs', import\.meta\.url\), \{\s*type: 'module',\s*name: 'brainbar-3d-layout'/);
+assert.match(graph3dSource, /layoutState/);
+assert.match(graph3dSource, /function normalizedEdgeSemanticKey/);
+assert.doesNotMatch(graph3dSource, /\$\{source\}-\$\{target\}-\$\{index\}/);
+assert.match(graph3dSource, /worker\?\.terminate\(\)/);
+assert.doesNotMatch(graph3dSource, /function calculateLayout\(/);
+assert.doesNotMatch(graph3dSource, /function relaxLayout\(/);
+assert.match(graph3dSource, /layout-worker-test/);
+assert.match(graph3dSource, /layout-worker-mode/);
+assert.match(graph3dSource, /__brainBarLayoutWorkerTestRelease/);
+assert.match(graph3dSource, /if \(!state\.graph\) \{[\s\S]*pendingGraphGeneration[\s\S]*return false;/);
+assert.match(graph3dSource, /event: 'graphReady',[\s\S]*generation: layoutContext\.graphGeneration,[\s\S]*lens: layoutContext\.lens/);
+const finishLayoutFailureSource = graph3dNamedFunctionSource('finishLayoutFailure');
+const failLayoutSource = graph3dNamedFunctionSource('failLayout');
+const isCurrentLayoutContextSource = graph3dNamedFunctionSource('isCurrentLayoutContext');
+const cancelActiveLayoutRequestSource = graph3dNamedFunctionSource('cancelActiveLayoutRequest');
+assert.match(finishLayoutFailureSource, /if \(isCurrentLayoutContext\(context\)\) \{\s*state\.layoutState = 'failed';\s*failLayout\(context\);/);
+assert.match(failLayoutSource, /if \(context && state\.pendingLayoutContext === context && context\.rollbackSnapshot\) \{[\s\S]*restoreTransactionalGraphState\(context\.rollbackSnapshot\);[\s\S]*state\.pendingLayoutContext = null;[\s\S]*state\.layoutState = 'committed';[\s\S]*window\.__brainBarGraphReady = true;[\s\S]*3D graph refresh could not be completed\. Retry\./);
+assert.match(failLayoutSource, /window\.__brainBarGraphReady = false;[\s\S]*3D graph layout could not be completed\. Retry\./);
+assert.match(isCurrentLayoutContextSource, /state\.pendingLayoutContext === context[\s\S]*context\.graphGeneration === state\.graphGeneration[\s\S]*context\.epoch === state\.layoutEpoch/);
+assert.match(isCurrentLayoutContextSource, /context\.lens === state\.lens[\s\S]*context\.visibleGraphRevision === state\.visibleGraphRevision[\s\S]*context\.epoch === state\.layoutEpoch/);
+assert.match(cancelActiveLayoutRequestSource, /state\.pendingLayoutContext === request\.context[\s\S]*state\.pendingLayoutContext = null;/);
+assert.match(graph3dWorkerSource, /self\.postMessage\(\{ type: 'ready' \}\)/);
+assert.match(graph3dWorkerSource, /positions: layout\.positions\.buffer/);
+assert.match(graph3dWorkerSource, /\[\s*layout\.positions\.buffer,[\s\S]*layout\.structuralRanks\.buffer\s*\]/);
+assert.match(graph3dWorkerSource, /layoutSchemaVersion: graph3dLayoutSchemaVersion/);
+assert.match(graph3dWorkerSource, /communityIndexByNode: layout\.communityIndexByNode\.buffer/);
+assert.match(graph3dWorkerSource, /communityCenters: layout\.communityCenters\.buffer/);
+assert.match(graph3dWorkerSource, /communityBounds: layout\.communityBounds\.buffer/);
+assert.match(graph3dWorkerSource, /structuralRanks: layout\.structuralRanks\.buffer/);
+assert.match(graph3dWorkerSource, /communityCount: layout\.communityCount/);
+assert.equal(graph3dPresentation.adaptiveDetailLevel(16000), 'balanced');
+assert.equal(graph3dPresentation.adaptiveDetailLevel(16001), 'overview');
 assert.match(graph3dSource, /function clearInteractiveModes[\s\S]*clearFocusOrbit\(false\)[\s\S]*clearPathMode\(false\)[\s\S]*clearGraphStory\(false\)/);
 assert.match(graph3dSource, /Compare paths/);
 assert.match(graph3dSource, /No route found/);
@@ -655,6 +1124,10 @@ assert.ok(resetAll.nodeUpdates.every((update) => update.hidden === false));
   'BrainBar/Resources/Graph3D/index.html',
   'BrainBar/Resources/Graph3D/graph3d.css',
   'BrainBar/Resources/Graph3D/graph3d.js',
+  'BrainBar/Resources/Graph3D/graph3d-layout-utils.mjs',
+  'BrainBar/Resources/Graph3D/graph3d-layout-cache.mjs',
+  'BrainBar/Resources/Graph3D/graph3d-layout-worker.mjs',
+  'BrainBar/Resources/Graph3D/graph3d-presentation-utils.mjs',
   'BrainBar/Resources/Graph3D/graph3d-living-utils.mjs',
   'BrainBar/Resources/Graph3D/graph3d-path-utils.mjs',
   'BrainBar/Resources/Graph3D/graph3d-search-utils.mjs',

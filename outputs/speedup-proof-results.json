@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "verdict": "PROVEN",
+  "reason": "Correctness passed and the lower after median exceeds the noise threshold.",
+  "correctness": "passed",
+  "before_median_ms": 4856.483,
+  "after_median_ms": 2100.981,
+  "change_ms": -2755.502,
+  "improvement_pct": 56.74,
+  "speedup_ratio": 2.312,
+  "noise_threshold_pct": 12.28,
+  "max_cv": 0.06138,
+  "before": {
+    "median_ms": 4856.482982635498,
+    "p95_ms": 5573.567771911621,
+    "mean_ms": 4998.034569952223,
+    "min_ms": 4777.796030044556,
+    "max_ms": 5593.632936477661,
+    "cv": 0.06137976252150126,
+    "runs": 9,
+    "warmups": 2,
+    "command": "node scripts/run-renderer-measurements.mjs --case 25k-stress --format json"
+  },
+  "after": {
+    "median_ms": 2100.9809970855713,
+    "p95_ms": 2290.0468349456787,
+    "mean_ms": 2126.842459042867,
+    "min_ms": 1988.7750148773193,
+    "max_ms": 2299.690008163452,
+    "cv": 0.05733079154411968,
+    "runs": 9,
+    "warmups": 2,
+    "command": "node scripts/run-renderer-measurements.mjs --case 25k-stress --format json"
+  }
+}

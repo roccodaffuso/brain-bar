@@ -1,0 +1,97 @@
+{
+  "schemaVersion": 1,
+  "kind": "graph3d-presentation-acceptance-manifest",
+  "state": "evidence-complete-owner-visual-review-accepted",
+  "fixtures": [
+    { "name": "1k", "nodeCount": 1000, "edgeCount": 2380 },
+    { "name": "inspected-shape", "nodeCount": 12547, "edgeCount": 29868 },
+    { "name": "25k-stress", "nodeCount": 25000, "edgeCount": 59512 }
+  ],
+  "scenarios": [
+    "overview-collapsed",
+    "overview-docked",
+    "community",
+    "node-focus",
+    "path",
+    "recent",
+    "narrow-overlay",
+    "reduce-motion"
+  ],
+  "provisionalGates": {
+    "overviewPaintedNodeLimit": 7000,
+    "overviewPromotionAllowance": "one additional painted node per active promoted identity",
+    "state": "accepted for v0.10 release review"
+  },
+  "requiredRuntimeDiagnostics": [
+    "layoutSchemaVersion",
+    "layoutProfile",
+    "detailLevel",
+    "detailReason",
+    "paintedNodeCount",
+    "paintedEdgeCount",
+    "communityAnchorCount",
+    "persistentLabelCount",
+    "sidebarState",
+    "cameraPreset",
+    "staticLayerRebuildMs",
+    "labelAllocationMs",
+    "frameQuality"
+  ],
+  "hostedRuntimeReports": {
+    "source": "scripts/run-renderer-measurements.mjs",
+    "protocol": "1 cold, 2 warmup, 9 measured hosted WKWebView runs",
+    "artifacts": [
+      "outputs/graph3d-renderer-measurements-1k-final.json",
+      "outputs/graph3d-renderer-measurements-inspected-shape-final.json",
+      "outputs/graph3d-renderer-measurements-25k-stress-final.json"
+    ],
+    "requiredMetrics": [
+      "threeDPanOrbitFrameMs",
+      "threeDHoverToHighlightMs",
+      "threeDSelectionToFirstFeedbackMs",
+      "threeDSidebarOpenReframeMs",
+      "threeDOverviewCommunityTransitionMs"
+    ],
+    "bindingGates": {
+      "interactionFeedbackP95Ms": 50,
+      "panOrbitFrameP95Ms": 33
+    }
+  },
+  "afterAcceptance": {
+    "report": "outputs/graph3d-presentation-acceptance-after.json",
+    "markdown": "outputs/graph3d-presentation-acceptance-after.md",
+    "countGolden": "outputs/graph3d-presentation-count-golden-v1.json",
+    "hostedRuntimeAttachedFixture": "25k-stress",
+    "bindingGates": {
+      "interactionFeedbackP95Ms": { "limit": 50, "observed": 13, "status": "pass" },
+      "panOrbitFrameP95Ms": { "limit": 33, "observed": 3, "status": "pass" }
+    },
+    "observedOnly": {
+      "sidebarOpenReframeP95Ms": 13,
+      "overviewCommunityTransitionP95Ms": 58.2
+    }
+  },
+  "visualAcceptance": {
+    "artifacts": "outputs/graph3d-visual-acceptance/manifest.json",
+    "state": "public-synthetic-captures-complete-owner-visual-review-accepted",
+    "before": "outputs/graph3d-presentation-baseline-before-0137a2e.json",
+    "beforeStatus": "historical structural-only; no fabricated baseline image"
+  },
+  "wholeRendererMemoryEvidence": {
+    "json": "outputs/graph3d-whole-renderer-memory-evidence.json",
+    "markdown": "outputs/graph3d-whole-renderer-memory-evidence.md",
+    "singleFocusedWebViewMaximumSampledPhysicalFootprintBytes": 827215760,
+    "singleFocusedWebViewMaximumSampledPhysicalFootprintMiB": 788.89,
+    "provisionalReleaseReviewCeilingMiB": 900,
+    "provisionalReleaseReviewHeadroomMiB": 111.11,
+    "provisionalReleaseReviewPassed": true,
+    "harnessStressUpperBoundBytes": 3196977184,
+    "harnessStressUpperBoundMiB": 3048.88,
+    "state": "observed; provisional v0.10 single-view release-review ceiling passed"
+  },
+  "golden": {
+    "kind": "count-only",
+    "state": "captured-with-public-synthetic-visual-proof",
+    "reason": "planner count gates pass and the matching public synthetic capture matrix is present; owner review of real-vault visuals remains separate"
+  }
+}

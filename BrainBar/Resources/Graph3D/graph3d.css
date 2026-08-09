@@ -43,6 +43,15 @@ body {
   min-height: 0;
 }
 
+#app[data-sidebar-state="collapsed"],
+#app[data-sidebar-state="overlay"] {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+#app[data-sidebar-state="docked"] {
+  grid-template-columns: minmax(0, 1fr) minmax(300px, min(44vw, var(--sidebar-width, 360px)));
+}
+
 #stage {
   position: relative;
   min-width: 0;
@@ -53,6 +62,14 @@ body {
     linear-gradient(135deg, rgba(68, 91, 124, 0.14), transparent 34%),
     linear-gradient(205deg, rgba(72, 124, 121, 0.07), transparent 42%),
     linear-gradient(180deg, #050814 0%, #070a13 52%, #05070d 100%);
+}
+
+#stage.is-navigating {
+  cursor: grabbing;
+}
+
+#stage.has-navigation-focus {
+  box-shadow: inset 0 0 0 2px rgba(127, 160, 255, 0.72);
 }
 
 #stage::before {
@@ -115,6 +132,127 @@ body {
   display: none;
 }
 
+#graph-controls {
+  position: absolute;
+  right: 16px;
+  top: 16px;
+  z-index: 7;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px;
+  border: 1px solid var(--bb-border);
+  border-radius: 12px;
+  background: rgba(21, 23, 34, 0.78);
+  backdrop-filter: blur(16px) saturate(1.12);
+}
+
+#navigation-hint {
+  position: absolute;
+  left: 16px;
+  bottom: 16px;
+  z-index: 6;
+  padding: 7px 10px;
+  border: 1px solid var(--bb-border);
+  border-radius: 999px;
+  background: rgba(14, 17, 26, 0.72);
+  color: var(--bb-text-muted);
+  font-size: 10px;
+  font-weight: 650;
+  letter-spacing: 0.01em;
+  pointer-events: none;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  transition: opacity 120ms ease;
+}
+
+#navigation-hint span {
+  padding: 0 3px;
+  color: var(--bb-text-faint);
+}
+
+#stage.is-navigating #navigation-hint {
+  opacity: 0.3;
+}
+
+@media (max-width: 720px) {
+  #navigation-hint {
+    max-width: calc(100% - 32px);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+}
+
+#graph-controls label {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding-left: 5px;
+  color: var(--bb-text-muted);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+#graph-controls select,
+#graph-controls button {
+  box-sizing: border-box;
+  height: 28px;
+  min-height: 28px;
+  border: 1px solid var(--bb-border);
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.055);
+  color: var(--bb-text-secondary);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 680;
+}
+
+#graph-controls button {
+  min-width: 44px;
+}
+
+#graph-controls select:focus,
+#graph-controls select:focus-visible,
+#graph-controls button:focus,
+#graph-controls button:focus-visible,
+#sidebar button:focus,
+#sidebar button:focus-visible,
+#sidebar input:focus,
+#sidebar input:focus-visible {
+  outline: 2px solid var(--bb-accent) !important;
+  outline-offset: 2px;
+}
+
+#app[data-sidebar-state="collapsed"] #sidebar {
+  display: none;
+}
+
+#app[data-sidebar-state="overlay"] #sidebar {
+  position: absolute;
+  z-index: 10;
+  top: 16px;
+  right: 16px;
+  bottom: 16px;
+  width: min(var(--sidebar-width, 360px), calc(100vw - 32px));
+  border: 1px solid var(--bb-border);
+  border-radius: 14px;
+  background: rgba(21, 23, 34, 0.96);
+  box-shadow: 0 20px 70px rgba(0, 0, 0, 0.42);
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 #overlay {
   position: absolute;
   left: 50%;
@@ -133,7 +271,78 @@ body {
   -webkit-backdrop-filter: blur(18px) saturate(1.14);
 }
 
+#graph-health-panel {
+  position: absolute;
+  z-index: 8;
+  top: 18px;
+  right: 18px;
+  width: min(460px, calc(100% - 36px));
+  max-height: calc(100% - 36px);
+  overflow: auto;
+  padding: 16px;
+  border: 1px solid var(--bb-border);
+  border-radius: 14px;
+  background: rgba(18, 21, 30, 0.96);
+  color: var(--bb-text-secondary);
+  box-shadow: 0 18px 60px rgba(0, 0, 0, 0.36);
+}
+
+#graph-health-panel[hidden] {
+  display: none;
+}
+
+#graph-health-panel h2 {
+  margin-top: 8px;
+  color: var(--bb-text);
+  font-size: 16px;
+}
+
+.evidence-panel {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--bb-border-subtle);
+}
+
+.evidence-links {
+  margin-top: 11px;
+  padding-top: 8px;
+  border-top: 1px solid var(--bb-border-subtle);
+}
+
+.evidence-links h4 {
+  margin: 0 0 6px;
+  font-size: 12px;
+}
+
+.evidence-links p,
+.evidence-proposal p {
+  margin: 5px 0;
+  font-size: 11px;
+}
+
+.evidence-proposal {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--bb-border-subtle);
+}
+
+.evidence-proposal pre {
+  overflow: auto;
+  margin: 8px 0;
+  padding: 8px;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.24);
+  color: var(--bb-text-secondary);
+  font: 11px ui-monospace, SFMono-Regular, Menlo, monospace;
+  white-space: pre-wrap;
+}
+
+.evidence-caveat {
+  color: var(--bb-warning);
+}
+
 #sidebar {
+  position: relative;
   display: grid;
   grid-template-rows: auto minmax(220px, 1fr) minmax(120px, 0.58fr) auto;
   min-width: 0;
@@ -143,6 +352,39 @@ body {
   border-left: 1px solid var(--bb-border-subtle);
   background: #12151d;
   box-shadow: none;
+}
+
+#sidebar-resizer {
+  display: none;
+  position: absolute;
+  z-index: 8;
+  top: 0;
+  bottom: 0;
+  left: -12px;
+  width: 24px;
+  cursor: col-resize;
+  touch-action: none;
+  outline: none;
+}
+
+#app[data-sidebar-state="docked"] #sidebar-resizer {
+  display: block;
+}
+
+#sidebar-resizer::after {
+  content: "";
+  position: absolute;
+  top: 42%;
+  bottom: 42%;
+  left: 11px;
+  width: 2px;
+  border-radius: 2px;
+  background: rgba(177, 197, 255, 0.36);
+}
+
+#sidebar-resizer:focus-visible::after,
+#sidebar-resizer:hover::after {
+  background: var(--bb-accent);
 }
 
 #search-wrap,
@@ -1279,6 +1521,12 @@ button:focus-visible,
 
 .legend-item input {
   accent-color: var(--bb-accent);
+  width: 24px;
+  height: 24px;
+}
+
+.legend-label {
+  min-height: 24px;
 }
 
 /* Premium app surface v2: flatter sidebar and native-control vocabulary. */
@@ -1290,8 +1538,8 @@ button:focus-visible,
   --bb-border: rgba(255, 255, 255, 0.052);
   --bb-border-subtle: rgba(255, 255, 255, 0.028);
   --bb-text-secondary: rgba(179, 175, 185, 0.88);
-  --bb-text-muted: rgba(142, 137, 151, 0.84);
-  --bb-text-faint: rgba(105, 101, 113, 0.78);
+  --bb-text-muted: rgba(154, 150, 164, 0.92);
+  --bb-text-faint: rgba(148, 144, 158, 0.92);
 }
 
 #app {

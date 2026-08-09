@@ -1,0 +1,59 @@
+{
+  "schema_version": 1,
+  "verdict": "PROVEN",
+  "reason": "Correctness passed and the lower after median exceeds the noise threshold.",
+  "correctness": "passed",
+  "before_median_ms": 402.573,
+  "after_median_ms": 0.029,
+  "change_ms": -402.544,
+  "improvement_pct": 99.99,
+  "speedup_ratio": 13840.275,
+  "noise_threshold_pct": 8.14,
+  "max_cv": 0.04071,
+  "before": {
+    "label": "legacy-main-actor-payload",
+    "command": "node scripts/run-renderer-measurements.mjs --case inspected-shape --transport-only --transport-implementation legacy --format json",
+    "median_ms": 402.57298946380615,
+    "p95_ms": 415.74440002441406,
+    "mean_ms": 405.5650101767646,
+    "min_ms": 401.324987411499,
+    "max_ms": 418.55597496032715,
+    "cv": 0.014090782564199916,
+    "runs": 9,
+    "warmups": 2,
+    "samples_ms": [
+      408.39993953704834,
+      401.49009227752686,
+      401.5580415725708,
+      403.04505825042725,
+      418.55597496032715,
+      401.324987411499,
+      402.57298946380615,
+      411.52703762054443,
+      401.61097049713135
+    ]
+  },
+  "after": {
+    "label": "current-main-actor-local-transport",
+    "command": "node scripts/run-renderer-measurements.mjs --case inspected-shape --transport-only --transport-implementation current --format json",
+    "median_ms": 0.029087066650390625,
+    "p95_ms": 0.030612945556640625,
+    "mean_ms": 0.02910031212700738,
+    "min_ms": 0.027060508728027344,
+    "max_ms": 0.030994415283203125,
+    "cv": 0.040711296813833224,
+    "runs": 9,
+    "warmups": 2,
+    "samples_ms": [
+      0.030040740966796875,
+      0.030994415283203125,
+      0.028967857360839844,
+      0.029921531677246094,
+      0.028014183044433594,
+      0.029921531677246094,
+      0.029087066650390625,
+      0.027894973754882812,
+      0.027060508728027344
+    ]
+  }
+}

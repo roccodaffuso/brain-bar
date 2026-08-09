@@ -1,0 +1,65 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Public safety check
+        run: scripts/check-public-safety.sh
+
+      - name: JavaScript checks
+        run: |
+          node --check BrainBar/Resources/Graph2D/brainbar-graph-runtime.js
+          node --check BrainBar/Resources/Graph3D/graph3d.js
+          node --check BrainBar/Resources/Graph3D/graph3d-layout-cache.mjs
+          node --check BrainBar/Resources/Graph3D/graph3d-layout-utils.mjs
+          node --check BrainBar/Resources/Graph3D/graph3d-layout-worker.mjs
+          node --check BrainBar/Resources/GraphEvidence/brainbar-graph-evidence.js
+          node --check scripts/test-graph-runtime.mjs
+          node --check scripts/generate-large-graph-fixtures.mjs
+          node --check scripts/test-large-graph-fixtures.mjs
+          node --check scripts/test-graph-evidence.mjs
+          node --check scripts/renderer-measurement-utils.mjs
+          node --check scripts/test-renderer-measurement-utils.mjs
+          node --check scripts/test-graph3d-community-layout.mjs
+          node --check scripts/test-graph3d-presentation.mjs
+          node --check scripts/test-graph3d-presentation-acceptance.mjs
+          node --check scripts/test-graph3d-visual-capture.mjs
+          node --check scripts/test-graph3d-whole-renderer-memory-evidence.mjs
+          node --check scripts/audit-graph3d-accessibility.mjs
+          node scripts/test-graph-runtime.mjs
+          node scripts/test-large-graph-fixtures.mjs
+          node scripts/test-graph-evidence.mjs
+          node scripts/test-renderer-measurement-utils.mjs
+          node scripts/test-graph3d-community-layout.mjs
+          node scripts/test-graph3d-presentation.mjs
+          node scripts/test-graph3d-presentation-acceptance.mjs
+          node scripts/test-graph3d-visual-capture.mjs
+          node scripts/test-graph3d-whole-renderer-memory-evidence.mjs
+          node scripts/audit-graph3d-accessibility.mjs
+
+      - name: Materialize large graph fixtures
+        run: |
+          fixture_dir="$RUNNER_TEMP/brainbar-large-graph-fixtures"
+          node scripts/generate-large-graph-fixtures.mjs --case inspected-shape --output-dir "$fixture_dir"
+          node scripts/generate-large-graph-fixtures.mjs --case 25k-stress --output-dir "$fixture_dir"
+          FIXTURE_DIR="$fixture_dir" node -e 'const fs = require("fs"); for (const [name, nodes, edges] of [["inspected-shape", 12547, 29868], ["25k-stress", 25000, 59512]]) { const graph = JSON.parse(fs.readFileSync(`${process.env.FIXTURE_DIR}/${name}.json`, "utf8")); if (graph.nodes.length !== nodes || graph.edges.length !== edges) throw new Error(`${name} count mismatch`); }'
+
+      - name: XCTest suite
+        run: xcodebuild test -project BrainBar.xcodeproj -scheme BrainBar -destination 'platform=macOS'

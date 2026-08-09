@@ -1,0 +1,2154 @@
+{
+  "schemaVersion": 1,
+  "kind": "graph3d-presentation-acceptance",
+  "capture": "after",
+  "protocol": {
+    "warmupRuns": 2,
+    "measuredRuns": 9,
+    "fixtureNames": [
+      "1k",
+      "inspected-shape",
+      "25k-stress"
+    ],
+    "scenarioNames": [
+      "overview-collapsed",
+      "overview-docked",
+      "community",
+      "node-focus",
+      "path",
+      "recent",
+      "narrow-overlay",
+      "reduce-motion"
+    ]
+  },
+  "metricScopes": {
+    "staticLayerPlanMs": "pure-presentation-planner; not a canvas rebuild timing",
+    "labelAllocationMs": "pure-presentation-planner; deterministic candidate set",
+    "interactionReplanMs": "pure-presentation-planner; not hover or selection feedback latency",
+    "frameQuality": "requires hosted WKWebView diagnostics"
+  },
+  "provisionalGates": {
+    "overviewPaintedNodeLimit": 7000,
+    "overviewPromotionAllowance": "one additional painted node per active promoted identity",
+    "state": "accepted for v0.10 release review"
+  },
+  "runtimeRequirements": {
+    "diagnostics": [
+      "layoutSchemaVersion",
+      "layoutProfile",
+      "detailLevel",
+      "detailReason",
+      "paintedNodeCount",
+      "paintedEdgeCount",
+      "communityAnchorCount",
+      "persistentLabelCount",
+      "sidebarState",
+      "cameraPreset",
+      "staticLayerRebuildMs",
+      "labelAllocationMs",
+      "frameQuality"
+    ],
+    "metrics": [
+      "panOrbitFrameTimeMs",
+      "hoverToHighlightMs",
+      "selectionToFirstFeedbackMs",
+      "sidebarOpenReframeMs",
+      "overviewCommunityTransitionMs",
+      "frameQuality"
+    ]
+  },
+  "hostedRuntime": {
+    "status": "verified-hosted-wkwebview",
+    "fixture": {
+      "edgeCount": 59512,
+      "name": "25k-stress",
+      "nodeCount": 25000
+    },
+    "protocol": {
+      "coldRuns": 1,
+      "measuredRuns": 9,
+      "warmupRuns": 2
+    },
+    "metrics": {
+      "panOrbitFrameTimeMs": {
+        "cvPercent": 20.32789070454354,
+        "p50": 2,
+        "p95": 3,
+        "samples": [
+          3,
+          2,
+          2,
+          2,
+          2,
+          3,
+          2,
+          3,
+          3
+        ]
+      },
+      "hoverToHighlightMs": {
+        "cvPercent": 6.666666666666667,
+        "p50": 10,
+        "p95": 11,
+        "samples": [
+          11,
+          10,
+          10,
+          11,
+          10,
+          9,
+          10,
+          10,
+          9
+        ]
+      },
+      "selectionToFirstFeedbackMs": {
+        "cvPercent": 5.1425947722658005,
+        "p50": 12,
+        "p95": 13,
+        "samples": [
+          11,
+          13,
+          12,
+          13,
+          12,
+          12,
+          12,
+          12,
+          13
+        ]
+      },
+      "sidebarOpenReframeMs": {
+        "cvPercent": 3.4015067152494174,
+        "p50": 12,
+        "p95": 13.000000000000137,
+        "samples": [
+          12,
+          12,
+          12,
+          12,
+          13.000000000000227,
+          12,
+          12,
+          12,
+          13
+        ]
+      },
+      "overviewCommunityTransitionMs": {
+        "cvPercent": 4.107192034749852,
+        "p50": 55,
+        "p95": 58.2,
+        "samples": [
+          54,
+          55,
+          57,
+          53,
+          56,
+          55,
+          52.99999999999977,
+          51,
+          59
+        ]
+      }
+    },
+    "gates": {
+      "interactionFeedbackP95Ms": {
+        "limit": 50,
+        "observed": 13,
+        "status": "pass"
+      },
+      "panOrbitFrameP95Ms": {
+        "limit": 33,
+        "observed": 3,
+        "status": "pass"
+      },
+      "sidebarOpenReframe": {
+        "status": "observed"
+      },
+      "overviewCommunityTransition": {
+        "status": "observed"
+      }
+    }
+  },
+  "fixtures": [
+    {
+      "name": "1k",
+      "nodeCount": 1000,
+      "edgeCount": 2380,
+      "communityCount": 10,
+      "indexBuildMs": {
+        "scope": "pure-presentation-index; renderer indexes pre-existing",
+        "samples": [
+          4.6863,
+          5.1408,
+          3.0665,
+          2.8327,
+          2.7468,
+          3.0452,
+          3.0741,
+          2.9684,
+          2.7398
+        ],
+        "p50": 3.0452,
+        "p95": 4.959,
+        "cvPercent": 25.0258
+      },
+      "scenarios": [
+        {
+          "scenario": "overview-collapsed",
+          "sidebarState": "collapsed",
+          "cameraPreset": "Overview",
+          "detailLevel": "overview",
+          "detailReason": "user",
+          "reduceMotion": false,
+          "queryableNodeCount": 1000,
+          "queryableEdgeCount": 2380,
+          "paintedNodeCount": 1000,
+          "paintedEdgeCount": 2380,
+          "communityAnchorCount": 10,
+          "persistentLabelCount": 8,
+          "activePromotionNodeCount": 0,
+          "gates": {
+            "overviewPaintBudget": {
+              "status": "not-applicable",
+              "budget": 7000,
+              "allowance": 0
+            }
+          },
+          "metrics": {
+            "staticLayerPlanMs": {
+              "scope": "pure-presentation-planner",
+              "samples": [
+                1.9519,
+                2.2091,
+                1.4591,
+                1.6135,
+                2.0484,
+                1.8581,
+                1.9322,
+                1.5548,
+                1.9307
+              ],
+              "p50": 1.9307,
+              "p95": 2.1448,
+              "cvPercent": 12.6433
+            },
+            "labelAllocationMs": {
+              "scope": "pure-presentation-planner",
+              "samples": [
+                0.2095,
+                0.104,
+                0.0852,
+                0.0839,
+                0.0835,
+                0.082,
+                0.0917,
+                0.1015,
+                0.0817
+              ],
+              "p50": 0.0852,
+              "p95": 0.1673,
+              "cvPercent": 37.6417
+            },
+            "interactionReplanMs": {
+              "scope": "pure-presentation-planner",
+              "samples": [
+                1.9519,
+                2.2091,
+                1.4591,
+                1.6135,
+                2.0484,
+                1.8581,
+                1.9322,
+                1.5548,
+                1.9307
+              ],
+              "p50": 1.9307,
+              "p95": 2.1448,
+              "cvPercent": 12.6433
+            },
+            "frameQuality": {
+              "status": "requires-runtime-diagnostics"
+            }
+          }
+        },
+        {
+          "scenario": "overview-docked",
+          "sidebarState": "docked",
+          "cameraPreset": "Overview",
+          "detailLevel": "overview",
+          "detailReason": "user",
+          "reduceMotion": false,
+          "queryableNodeCount": 1000,
+          "queryableEdgeCount": 2380,
+          "paintedNodeCount": 1000,
+          "paintedEdgeCount": 2380,
+          "communityAnchorCount": 10,
+          "persistentLabelCount": 8,
+          "activePromotionNodeCount": 0,
+          "gates": {
+            "overviewPaintBudget": {
+              "status": "not-applicable",
+              "budget": 7000,
+              "allowance": 0
+            }
+          },
+          "metrics": {
+            "staticLayerPlanMs": {
+              "scope": "pure-presentation-planner",
+              "samples": [
+                1.1873,
+                1.2216,
+                1.1664,
+                1.1689,
+                1.3487,
+                1.2378,
+                1.4298,
+                1.3142,
+                1.2219
+              ],
+              "p50": 1.2219,
+              "p95": 1.3974,
+              "cvPercent": 6.7807
+            },
+            "labelAllocationMs": {
+              "scope": "pure-presentation-planner",
+              "samples": [
+                0.0723,
+                0.0746,
+                0.0784,
+                0.073,
+                0.0705,
+                0.0691,
+                0.0708,
+                0.0775,
+                0.0728
+              ],
+              "p50": 0.0728,
+              "p95": 0.078,
+              "cvPercent": 4.0303
+            },
+            "interactionReplanMs": {
+              "scope": "pure-presentation-planner",
+              "samples": [
+                1.1873,
+                1.2216,
+                1.1664,
+                1.1689,
+                1.3487,
+                1.2378,
+                1.4298,
+                1.3142,
+                1.2219
+              ],
+              "p50": 1.2219,
+              "p95": 1.3974,
+              "cvPercent": 6.7807
+            },
+            "frameQuality": {
+              "status": "requires-runtime-diagnostics"
+            }
+          }
+        },
+        {
+          "scenario": "community",
+          "sidebarState": "collapsed",
+          "cameraPreset": "Community",
+          "detailLevel": "overview",
+          "detailReason": "user",
+          "reduceMotion": false,
+          "queryableNodeCount": 1000,
+          "queryableEdgeCount": 2380,
+          "paintedNodeCount": 1000,
+          "paintedEdgeCount": 2380,
+          "communityAnchorCount": 10,
+          "persistentLabelCount": 14,
+          "activePromotionNodeCount": 1,
+          "gates": {
+            "overviewPaintBudget": {
+              "status": "not-applicable",
+              "budget": 7000,
+              "allowance": 1
+            }
+          },
+          "metrics": {
+            "staticLayerPlanMs": {
+              "scope": "pure-presentation-planner",
+              "samples": [
+                1.2539,
+                1.2187,
+                1.1925,
+                1.3816,
+                1.2393,
+                1.3064,
+                1.3226,
+                1.2138,
+                1.3738
+              ],
+              "p50": 1.2539,
+              "p95": 1.3785,
+              "cvPercent": 5.1995
+            },
+            "labelAllocationMs": {
+              "scope": "pure-presentation-planner",
+              "samples": [
+                0.0833,
+                0.0819,
+                0.0863,
+                0.2793,
+                0.0777,
+                0.074,
+                0.0721,
+                0.0767,
+                0.075
+              ],
+              "p50": 0.0777,
+              "p95": 0.2021,
+              "cvPercent": 62.8411
+            },
+            "interactionReplanMs": {
+              "scope": "pure-presentation-planner",
+              "samples": [
+                1.2539,
+                1.2187,
+                1.1925,
+                1.3816,
+                1.2393,
+                1.3064,
+                1.3226,
+                1.2138,
+                1.3738
+              ],
+              "p50": 1.2539,
+              "p95": 1.3785,
+              "cvPercent": 5.1995
+            },
+            "frameQuality": {
+              "status": "requires-runtime-diagnostics"
+            }
+          }
+        },
+        {
+          "scenario": "node-focus",
+          "sidebarState": "collapsed",
+          "cameraPreset": "Node Focus",
+          "detailLevel": "overview",
+          "detailReason": "user",
+          "reduceMotion": false,
+          "queryableNodeCount": 1000,
+          "queryableEdgeCount": 2380,
+          "paintedNodeCount": 1000,
+          "paintedEdgeCount": 2380,
+          "communityAnchorCount": 10,
+          "persistentLabelCount": 14,
+          "activePromotionNodeCount": 1,
+          "gates": {
+            "overviewPaintBudget": {
+              "status": "not-applicable",
+              "budget": 7000,
+              "allowance": 1
+            }
+          },
+          "metrics": {
+            "staticLayerPlanMs": {
+              "scope": "pure-presentation-planner",
+              "samples": [
+                1.206,
+                1.1891,
+                1.3559,
+                1.245,
+                1.2515,
+                1.2818,
+                1.24,
+                1.1741,
+                1.3552
+              ],
+              "p50": 1.245,
+              "p95": 1.3556,
+              "cvPercent": 4.9361
+            },
+            "labelAllocationMs": {
+              "scope": "pure-presentation-planner",
+              "samples": [
+                0.08,
+                0.1162,
+                0.0787,
+                0.0782,
+                0.0779,
+                0.0792,
+                0.0751,
+                0.0832,
+                0.0742
+              ],
+              "p50": 0.0787,
+              "p95": 0.103,
+              "cvPercent": 14.7353
+            },
+            "interactionReplanMs": {
+              "scope": "pure-presentation-planner",
+              "samples": [
+                1.206,
+                1.1891,
+                1.3559,
+                1.245,
+                1.2515,
+                1.2818,
+                1.24,
+                1.1741,
+                1.3552
+              ],
+              "p50": 1.245,
+              "p95": 1.3556,
+              "cvPercent": 4.9361
+            },
+            "frameQuality": {
+              "status": "requires-runtime-diagnostics"
+            }
+          }
+        },
+        {
+          "scenario": "path",
+          "sidebarState": "collapsed",
+          "cameraPreset": "Active Path",
+          "detailLevel": "overview",
+          "detailReason": "user",
+          "reduceMotion": false,
+          "queryableNodeCount": 1000,
+          "queryableEdgeCount": 2380,
+          "paintedNodeCount": 1000,
+          "paintedEdgeCount": 2380,
+          "communityAnchorCount": 10,
+          "persistentLabelCount": 14,
+          "activePromotionNodeCount": 5,
+          "gates": {
+            "overviewPaintBudget": {
+              "status": "not-applicable",
+              "budget": 7000,
+              "allowance": 5
+            }
+          },
+          "metrics": {
+            "staticLayerPlanMs": {
+              "scope": "pure-presentation-planner",
+              "samples": [
+                1.1909,
+                1.3905,
+                1.19,
+                1.161,
+                1.1599,
+                1.1729,
+                1.2247,
+                1.4244,
+                1.2873
+              ],
+              "p50": 1.1909,
+              "p95": 1.4109,
+              "cvPercent": 7.6225
+            },
+            "labelAllocationMs": {
+              "scope": "pure-presentation-planner",
+              "samples": [
+                0.0673,
+                0.0639,
+                0.0651,
+                0.1243,
+                0.0936,
+                0.0753,
+                0.0656,
+                0.0675,
+                0.0675
+              ],
+              "p50": 0.0675,
+              "p95": 0.112,
+              "cvPercent": 24.7058
+            },
+            "interactionReplanMs": {
+              "scope": "pure-presentation-planner",
+              "samples": [
+                1.1909,
+                1.3905,
+                1.19,
+                1.161,
+                1.1599,
+                1.1729,
+                1.2247,
+                1.4244,
+                1.2873
+              ],
+              "p50": 1.1909,
+              "p95": 1.4109,
+              "cvPercent": 7.6225
+            },
+            "frameQuality": {
+              "status": "requires-runtime-diagnostics"
+            }
+          }
+        },
+        {
+          "scenario": "recent",
+          "sidebarState": "collapsed",
+          "cameraPreset": "Recent Orbit",
+          "detailLevel": "overview",
+          "detailReason": "user",
+          "reduceMotion": false,
+          "queryableNodeCount": 1000,
+          "queryableEdgeCount": 2380,
+          "paintedNodeCount": 1000,
+          "paintedEdgeCount": 2380,
+          "communityAnchorCount": 10,
+          "persistentLabelCount": 14,
+          "activePromotionNodeCount": 7,
+          "gates": {
+            "overviewPaintBudget": {
+              "status": "not-applicable",
+              "budget": 7000,
+              "allowance": 7
+            }
+          },
+          "metrics": {
+            "staticLayerPlanMs": {
+              "scope": "pure-presentation-planner",
+              "samples": [
+                1.3701,
+                1.2261,
+                1.2021,
+                1.2185,
+                1.2168,
+                1.1931,
+                1.3946,
+                1.2454,
+                1.246
+              ],
+              "p50": 1.2261,
+              "p95": 1.3848,
+              "cvPercent": 5.5068
+            },
+            "labelAllocationMs": {
+              "scope": "pure-presentation-planner",
+              "samples": [
+                0.0696,
+                0.0706,
+                0.0688,
+                0.0691,
+                0.0683,
+                0.0675,
+                0.0696,
+                0.0714,
+                0.0695
+              ],
+              "p50": 0.0695,
+              "p95": 0.0711,
+              "cvPercent": 1.5817
+            },
+            "interactionReplanMs": {
+              "scope": "pure-presentation-planner",
+              "samples": [
+                1.3701,
+                1.2261,
+                1.2021,
+                1.2185,
+                1.2168,
+                1.1931,
+                1.3946,
+                1.2454,
+                1.246
+              ],
+              "p50": 1.2261,
+              "p95": 1.3848,
+              "cvPercent": 5.5068
+            },
+            "frameQuality": {
+              "status": "requires-runtime-diagnostics"
+            }
+          }
+        },
+        {
+          "scenario": "narrow-overlay",
+          "sidebarState": "overlay",
+          "cameraPreset": "Overview",
+          "detailLevel": "overview",
+          "detailReason": "user",
+          "reduceMotion": false,
+          "queryableNodeCount": 1000,
+          "queryableEdgeCount": 2380,
+          "paintedNodeCount": 1000,
+          "paintedEdgeCount": 2380,
+          "communityAnchorCount": 10,
+          "persistentLabelCount": 8,
+          "activePromotionNodeCount": 0,
+          "gates": {
+            "overviewPaintBudget": {
+              "status": "not-applicable",
+              "budget": 7000,
+              "allowance": 0
+            }
+          },
+          "metrics": {
+            "staticLayerPlanMs": {
+              "scope": "pure-presentation-planner",
+              "samples": [
+                1.1669,
+                1.1758,
+                1.1569,
+                1.1598,
+                1.1396,
+                1.2841,
+                1.1661,
+                1.2568,
+                1.2064
+              ],
+              "p50": 1.1669,
+              "p95": 1.2732,
+              "cvPercent": 3.904
+            },
+            "labelAllocationMs": {
+              "scope": "pure-presentation-planner",
+              "samples": [
+                0.0653,
+                0.0645,
+                0.0651,
+                0.0647,
+                0.0654,
+                0.0644,
+                0.0648,
+                0.065,
+                0.0695
+              ],
+              "p50": 0.065,
+              "p95": 0.0679,
+              "cvPercent": 2.2639
+            },
+            "interactionReplanMs": {
+              "scope": "pure-presentation-planner",
+              "samples": [
+                1.1669,
+                1.1758,
+                1.1569,
+                1.1598,
+                1.1396,
+                1.2841,
+                1.1661,
+                1.2568,
+                1.2064
+              ],
+              "p50": 1.1669,
+              "p95": 1.2732,
+              "cvPercent": 3.904
+            },
+            "frameQuality": {
+              "status": "requires-runtime-diagnostics"
+            }
+          }
+        },
+        {
+          "scenario": "reduce-motion",
+          "sidebarState": "collapsed",
+          "cameraPreset": "Overview",
+          "detailLevel": "overview",
+          "detailReason": "user",
+          "reduceMotion": true,
+          "queryableNodeCount": 1000,
+          "queryableEdgeCount": 2380,
+          "paintedNodeCount": 1000,
+          "paintedEdgeCount": 2380,
+          "communityAnchorCount": 10,
+          "persistentLabelCount": 8,
+          "activePromotionNodeCount": 0,
+          "gates": {
+            "overviewPaintBudget": {
+              "status": "not-applicable",
+              "budget": 7000,
+              "allowance": 0
+            }
+          },
+          "metrics": {
+            "staticLayerPlanMs": {
+              "scope": "pure-presentation-planner",
+              "samples": [
+                1.1213,
+                1.1225,
+                1.1146,
+                1.116,
+                1.2243,
+                1.1365,
+                1.112,
+                1.1164,
+                1.111
+              ],
+              "p50": 1.1164,
+              "p95": 1.1892,
+              "cvPercent": 3.0015
+            },
+            "labelAllocationMs": {
+              "scope": "pure-presentation-planner",
+              "samples": [
+                0.0659,
+                0.0724,
+                0.0658,
+                0.0648,
+                0.0651,
+                0.0649,
+                0.0653,
+                0.0647,
+                0.0657
+              ],
+              "p50": 0.0653,
+              "p95": 0.0698,
+              "cvPercent": 3.4571
+            },
+            "interactionReplanMs": {
+              "scope": "pure-presentation-planner",
+              "samples": [
+                1.1213,
+                1.1225,
+                1.1146,
+                1.116,
+                1.2243,
+                1.1365,
+                1.112,
+                1.1164,
+                1.111
+              ],
+              "p50": 1.1164,
+              "p95": 1.1892,
+              "cvPercent": 3.0015
+            },
+            "frameQuality": {
+              "status": "requires-runtime-diagnostics"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "inspected-shape",
+      "nodeCount": 12547,
+      "edgeCount": 29868,
+      "communityCount": 64,
+      "indexBuildMs": {
+        "scope": "pure-presentation-index; renderer indexes pre-existing",
+        "samples": [
+          46.8905,
+          46.6108,
+          46.3407,
+          46.4723,
+          45.118,
+          46.5608,
+          46.2806,
+          47.1887,
+          46.5727
+        ],
+        "p50": 46.5608,
+        "p95": 47.0694,
+        "cvPercent": 1.159
+      },
+      "scenarios": [
+        {
+          "scenario": "overview-collapsed",
+          "sidebarState": "collapsed",
+          "cameraPreset": "Overview",
+          "detailLevel": "overview",
+          "detailReason": "user",
+          "reduceMotion": false,
+          "queryableNodeCount": 12547,
+          "queryableEdgeCount": 29868,
+          "paintedNodeCount": 7000,
+          "paintedEdgeCount": 7000,
+          "communityAnchorCount": 64,
+          "persistentLabelCount": 8,
+          "activePromotionNodeCount": 0,
+          "gates": {
+            "overviewPaintBudget": {
+              "status": "pass",
+              "budget": 7000,
+              "allowance": 0,
+              "limit": 7000,
+              "observed": 7000
+            }
+          },
+          "metrics": {
+            "staticLayerPlanMs": {
+              "scope": "pure-presentation-planner",
+              "samples": [
+                16.4839,
+                15.0072,
+                16.5557,
+                17.7647,
+                18.1119,
+                14.1668,
+                14.0927,
+                14.3459,
+                14.8389
+              ],
+              "p50": 15.0072,
+              "p95": 17.973,
+              "cvPercent": 9.3507
+            },
+            "labelAllocationMs": {
+              "scope": "pure-presentation-planner",
+              "samples": [
+                0.4573,
+                0.5158,
+                0.5027,
+                0.473,
+                0.4818,
+                0.4476,
+                0.4473,
+                0.4638,
+                0.5784
+              ],
+              "p50": 0.473,
+              "p95": 0.5533,
+              "cvPercent": 8.1765
+            },
+            "interactionReplanMs": {
+              "scope": "pure-presentation-planner",
+              "samples": [
+                16.4839,
+                15.0072,
+                16.5557,
+                17.7647,
+                18.1119,
+                14.1668,
+                14.0927,
+                14.3459,
+                14.8389
+              ],
+              "p50": 15.0072,
+              "p95": 17.973,
+              "cvPercent": 9.3507
+            },
+            "frameQuality": {
+              "status": "requires-runtime-diagnostics"
+            }
+          }
+        },
+        {
+          "scenario": "overview-docked",
+          "sidebarState": "docked",
+          "cameraPreset": "Overview",
+          "detailLevel": "overview",
+          "detailReason": "user",
+          "reduceMotion": false,
+          "queryableNodeCount": 12547,
+          "queryableEdgeCount": 29868,
+          "paintedNodeCount": 7000,
+          "paintedEdgeCount": 7000,
+          "communityAnchorCount": 64,
+          "persistentLabelCount": 8,
+          "activePromotionNodeCount": 0,
+          "gates": {
+            "overviewPaintBudget": {
+              "status": "pass",
+              "budget": 7000,
+              "allowance": 0,
+              "limit": 7000,
+              "observed": 7000
+            }
+          },
+          "metrics": {
+            "staticLayerPlanMs": {
+              "scope": "pure-presentation-planner",
+              "samples": [
+                17.6617,
+                13.9132,
+                14.1893,
+                14.3824,
+                14.686,
+                14.5923,
+                14.626,
+                14.8223,
+                15.276
+              ],
+              "p50": 14.626,
+              "p95": 16.7075,
+              "cvPercent": 6.9782
+            },
+            "labelAllocationMs": {
+              "scope": "pure-presentation-planner",
+              "samples": [
+                0.4353,
+                0.4407,
+                0.4305,
+                0.424,
+                0.3982,
+                2.1891,
+                0.4042,
+                0.4143,
+                0.4047
+              ],
+              "p50": 0.424,
+              "p95": 1.4897,
+              "cvPercent": 90.3847
+            },
+            "interactionReplanMs": {
+              "scope": "pure-presentation-planner",
+              "samples": [
+                17.6617,
+                13.9132,
+                14.1893,
+                14.3824,
+                14.686,
+                14.5923,
+                14.626,
+                14.8223,
+                15.276
+              ],
+              "p50": 14.626,
+              "p95": 16.7075,
+              "cvPercent": 6.9782
+            },
+            "frameQuality": {
+              "status": "requires-runtime-diagnostics"
+            }
+          }
+        },
+        {
+          "scenario": "community",
+          "sidebarState": "collapsed",
+          "cameraPreset": "Community",
+          "detailLevel": "overview",
+          "detailReason": "user",
+          "reduceMotion": false,
+          "queryableNodeCount": 12547,
+          "queryableEdgeCount": 29868,
+          "paintedNodeCount": 7001,
+          "paintedEdgeCount": 7000,
+          "communityAnchorCount": 64,
+          "persistentLabelCount": 14,
+          "activePromotionNodeCount": 1,
+          "gates": {
+            "overviewPaintBudget": {
+              "status": "pass",
+              "budget": 7000,
+              "allowance": 1,
+              "limit": 7001,
+              "observed": 7001
+            }
+          },
+          "metrics": {
+            "staticLayerPlanMs": {
+              "scope": "pure-presentation-planner",
+              "samples": [
+                15.2352,
+                15.5675,
+                14.5373,
+                15.0087,
+                14.9267,
+                17.0066,
+                14.6322,
+                14.7113,
+                14.0633
+              ],
+              "p50": 14.9267,
+              "p95": 16.4309,
+              "cvPercent": 5.2631
+            },
+            "labelAllocationMs": {
+              "scope": "pure-presentation-planner",
+              "samples": [
+                0.3949,
+                0.3977,
+                0.404,
+                0.3956,
+                0.3982,
+                0.3961,
+                0.3959,
+                0.3996,
+                0.42
+              ],
+              "p50": 0.3977,
+              "p95": 0.4136,
+              "cvPercent": 1.8631
+            },
+            "interactionReplanMs": {
+              "scope": "pure-presentation-planner",
+              "samples": [
+                15.2352,
+                15.5675,
+                14.5373,
+                15.0087,
+                14.9267,
+                17.0066,
+                14.6322,
+                14.7113,
+                14.0633
+              ],
+              "p50": 14.9267,
+              "p95": 16.4309,
+              "cvPercent": 5.2631
+            },
+            "frameQuality": {
+              "status": "requires-runtime-diagnostics"
+            }
+          }
+        },
+        {
+          "scenario": "node-focus",
+          "sidebarState": "collapsed",
+          "cameraPreset": "Node Focus",
+          "detailLevel": "overview",
+          "detailReason": "user",
+          "reduceMotion": false,
+          "queryableNodeCount": 12547,
+          "queryableEdgeCount": 29868,
+          "paintedNodeCount": 7001,
+          "paintedEdgeCount": 7000,
+          "communityAnchorCount": 64,
+          "persistentLabelCount": 14,
+          "activePromotionNodeCount": 1,
+          "gates": {
+            "overviewPaintBudget": {
+              "status": "pass",
+              "budget": 7000,
+              "allowance": 1,
+              "limit": 7001,
+              "observed": 7001
+            }
+          },
+          "metrics": {
+            "staticLayerPlanMs": {
+              "scope": "pure-presentation-planner",
+              "samples": [
+                14.4794,
+                15.8188,
+                14.7973,
+                14.561,
+                14.5801,
+                14.4704,
+                14.7375,
+                14.633,
+                14.6968
+              ],
+              "p50": 14.633,
+              "p95": 15.4102,
+              "cvPercent": 2.6516
+            },
+            "labelAllocationMs": {
+              "scope": "pure-presentation-planner",
+              "samples": [
+                0.4072,
+                0.402,
+                0.412,
+                0.4187,
+                0.409,
+                0.4031,
+                0.4047,
+                0.4123,
+                0.4035
+              ],
+              "p50": 0.4072,
+              "p95": 0.4161,
+              "cvPercent": 1.2723
+            },
+            "interactionReplanMs": {
+              "scope": "pure-presentation-planner",
+              "samples": [
+                14.4794,
+                15.8188,
+                14.7973,
+                14.561,
+                14.5801,
+                14.4704,
+                14.7375,
+                14.633,
+                14.6968
+              ],
+              "p50": 14.633,
+              "p95": 15.4102,
+              "cvPercent": 2.6516
+            },
+            "frameQuality": {
+              "status": "requires-runtime-diagnostics"
+            }
+          }
+        },
+        {
+          "scenario": "path",
+          "sidebarState": "collapsed",
+          "cameraPreset": "Active Path",
+          "detailLevel": "overview",
+          "detailReason": "user",
+          "reduceMotion": false,
+          "queryableNodeCount": 12547,
+          "queryableEdgeCount": 29868,
+          "paintedNodeCount": 7005,
+          "paintedEdgeCount": 7000,
+          "communityAnchorCount": 64,
+          "persistentLabelCount": 14,
+          "activePromotionNodeCount": 5,
+          "gates": {
+            "overviewPaintBudget": {
+              "status": "pass",
+              "budget": 7000,
+              "allowance": 5,
+              "limit": 7005,
+              "observed": 7005
+            }
+          },
+          "metrics": {
+            "staticLayerPlanMs": {
+              "scope": "pure-presentation-planner",
+              "samples": [
+                14.2922,
+                14.3597,
+                14.2127,
+                14.5525,
+                14.8966,
+                15.2172,
+                14.7738,
+                17.1967,
+                14.9256
+              ],
+              "p50": 14.7738,
+              "p95": 16.4049,
+              "cvPercent": 5.7483
+            },
+            "labelAllocationMs": {
+              "scope": "pure-presentation-planner",
+              "samples": [
+                0.3901,
+                0.3918,
+                0.3905,
+                0.3914,
+                0.3885,
+                0.3948,
+                0.3925,
+                0.3957,
+                0.3902
+              ],
+              "p50": 0.3914,
+              "p95": 0.3953,
+              "cvPercent": 0.5549
+            },
+            "interactionReplanMs": {
+              "scope": "pure-presentation-planner",
+              "samples": [
+                14.2922,
+                14.3597,
+                14.2127,
+                14.5525,
+                14.8966,
+                15.2172,
+                14.7738,
+                17.1967,
+                14.9256
+              ],
+              "p50": 14.7738,
+              "p95": 16.4049,
+              "cvPercent": 5.7483
+            },
+            "frameQuality": {
+              "status": "requires-runtime-diagnostics"
+            }
+          }
+        },
+        {
+          "scenario": "recent",
+          "sidebarState": "collapsed",
+          "cameraPreset": "Recent Orbit",
+          "detailLevel": "overview",
+          "detailReason": "user",
+          "reduceMotion": false,
+          "queryableNodeCount": 12547,
+          "queryableEdgeCount": 29868,
+          "paintedNodeCount": 7001,
+          "paintedEdgeCount": 7000,
+          "communityAnchorCount": 64,
+          "persistentLabelCount": 14,
+          "activePromotionNodeCount": 7,
+          "gates": {
+            "overviewPaintBudget": {
+              "status": "pass",
+              "budget": 7000,
+              "allowance": 7,
+              "limit": 7007,
+              "observed": 7001
+            }
+          },
+          "metrics": {
+            "staticLayerPlanMs": {
+              "scope": "pure-presentation-planner",
+              "samples": [
+                14.3804,
+                15.2582,
+                14.7346,
+                16.2765,
+                14.4865,
+                14.3433,
+                14.3371,
+                14.8435,
+                14.4112
+              ],
+              "p50": 14.4865,
+              "p95": 15.8692,
+              "cvPercent": 4.0596
+            },
+            "labelAllocationMs": {
+              "scope": "pure-presentation-planner",
+              "samples": [
+                0.4098,
+                0.4074,
+                0.4061,
+                0.4019,
+                0.4019,
+                0.401,
+                0.401,
+                0.4009,
+                0.4011
+              ],
+              "p50": 0.4019,
+              "p95": 0.4089,
+              "cvPercent": 0.7923
+            },
+            "interactionReplanMs": {
+              "scope": "pure-presentation-planner",
+              "samples": [
+                14.3804,
+                15.2582,
+                14.7346,
+                16.2765,
+                14.4865,
+                14.3433,
+                14.3371,
+                14.8435,
+                14.4112
+              ],
+              "p50": 14.4865,
+              "p95": 15.8692,
+              "cvPercent": 4.0596
+            },
+            "frameQuality": {
+              "status": "requires-runtime-diagnostics"
+            }
+          }
+        },
+        {
+          "scenario": "narrow-overlay",
+          "sidebarState": "overlay",
+          "cameraPreset": "Overview",
+          "detailLevel": "overview",
+          "detailReason": "user",
+          "reduceMotion": false,
+          "queryableNodeCount": 12547,
+          "queryableEdgeCount": 29868,
+          "paintedNodeCount": 7000,
+          "paintedEdgeCount": 7000,
+          "communityAnchorCount": 64,
+          "persistentLabelCount": 8,
+          "activePromotionNodeCount": 0,
+          "gates": {
+            "overviewPaintBudget": {
+              "status": "pass",
+              "budget": 7000,
+              "allowance": 0,
+              "limit": 7000,
+              "observed": 7000
+            }
+          },
+          "metrics": {
+            "staticLayerPlanMs": {
+              "scope": "pure-presentation-planner",
+              "samples": [
+                14.6829,
+                14.6053,
+                14.3023,
+                14.1203,
+                13.8029,
+                13.9581,
+                14.6502,
+                25.2734,
+                16.0218
+              ],
+              "p50": 14.6053,
+              "p95": 21.5728,
+              "cvPercent": 21.8584
+            },
+            "labelAllocationMs": {
+              "scope": "pure-presentation-planner",
+              "samples": [
+                0.4305,
+                0.4337,
+                0.4232,
+                0.4219,
+                0.411,
+                0.4138,
+                0.4208,
+                0.414,
+                0.4119
+              ],
+              "p50": 0.4208,
+              "p95": 0.4325,
+              "cvPercent": 1.8362
+            },
+            "interactionReplanMs": {
+              "scope": "pure-presentation-planner",
+              "samples": [
+                14.6829,
+                14.6053,
+                14.3023,
+                14.1203,
+                13.8029,
+                13.9581,
+                14.6502,
+                25.2734,
+                16.0218
+              ],
+              "p50": 14.6053,
+              "p95": 21.5728,
+              "cvPercent": 21.8584
+            },
+            "frameQuality": {
+              "status": "requires-runtime-diagnostics"
+            }
+          }
+        },
+        {
+          "scenario": "reduce-motion",
+          "sidebarState": "collapsed",
+          "cameraPreset": "Overview",
+          "detailLevel": "overview",
+          "detailReason": "user",
+          "reduceMotion": true,
+          "queryableNodeCount": 12547,
+          "queryableEdgeCount": 29868,
+          "paintedNodeCount": 7000,
+          "paintedEdgeCount": 7000,
+          "communityAnchorCount": 64,
+          "persistentLabelCount": 8,
+          "activePromotionNodeCount": 0,
+          "gates": {
+            "overviewPaintBudget": {
+              "status": "pass",
+              "budget": 7000,
+              "allowance": 0,
+              "limit": 7000,
+              "observed": 7000
+            }
+          },
+          "metrics": {
+            "staticLayerPlanMs": {
+              "scope": "pure-presentation-planner",
+              "samples": [
+                14.1583,
+                14.3241,
+                14.9418,
+                14.2712,
+                15.0016,
+                15.2708,
+                14.5993,
+                14.1309,
+                14.5234
+              ],
+              "p50": 14.5234,
+              "p95": 15.1631,
+              "cvPercent": 2.6364
+            },
+            "labelAllocationMs": {
+              "scope": "pure-presentation-planner",
+              "samples": [
+                0.4002,
+                0.412,
+                0.4015,
+                0.4012,
+                0.4081,
+                0.4124,
+                0.4059,
+                0.406,
+                0.4074
+              ],
+              "p50": 0.406,
+              "p95": 0.4122,
+              "cvPercent": 1.0361
+            },
+            "interactionReplanMs": {
+              "scope": "pure-presentation-planner",
+              "samples": [
+                14.1583,
+                14.3241,
+                14.9418,
+                14.2712,
+                15.0016,
+                15.2708,
+                14.5993,
+                14.1309,
+                14.5234
+              ],
+              "p50": 14.5234,
+              "p95": 15.1631,
+              "cvPercent": 2.6364
+            },
+            "frameQuality": {
+              "status": "requires-runtime-diagnostics"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "25k-stress",
+      "nodeCount": 25000,
+      "edgeCount": 59512,
+      "communityCount": 100,
+      "indexBuildMs": {
+        "scope": "pure-presentation-index; renderer indexes pre-existing",
+        "samples": [
+          87.3907,
+          85.9195,
+          85.8777,
+          85.4453,
+          84.8618,
+          84.6029,
+          86.9696,
+          86.4174,
+          92.4349
+        ],
+        "p50": 85.9195,
+        "p95": 90.4172,
+        "cvPercent": 2.5555
+      },
+      "scenarios": [
+        {
+          "scenario": "overview-collapsed",
+          "sidebarState": "collapsed",
+          "cameraPreset": "Overview",
+          "detailLevel": "overview",
+          "detailReason": "user",
+          "reduceMotion": false,
+          "queryableNodeCount": 25000,
+          "queryableEdgeCount": 59512,
+          "paintedNodeCount": 7000,
+          "paintedEdgeCount": 7000,
+          "communityAnchorCount": 100,
+          "persistentLabelCount": 8,
+          "activePromotionNodeCount": 0,
+          "gates": {
+            "overviewPaintBudget": {
+              "status": "pass",
+              "budget": 7000,
+              "allowance": 0,
+              "limit": 7000,
+              "observed": 7000
+            }
+          },
+          "metrics": {
+            "staticLayerPlanMs": {
+              "scope": "pure-presentation-planner",
+              "samples": [
+                16.8325,
+                17.0744,
+                16.6845,
+                17.0154,
+                16.6425,
+                17.3736,
+                20.7441,
+                16.7455,
+                16.9227
+              ],
+              "p50": 16.9227,
+              "p95": 19.3959,
+              "cvPercent": 7.0554
+            },
+            "labelAllocationMs": {
+              "scope": "pure-presentation-planner",
+              "samples": [
+                0.4045,
+                0.3994,
+                0.4143,
+                0.3926,
+                0.401,
+                0.479,
+                0.3967,
+                0.3912,
+                0.4173
+              ],
+              "p50": 0.401,
+              "p95": 0.4543,
+              "cvPercent": 6.2259
+            },
+            "interactionReplanMs": {
+              "scope": "pure-presentation-planner",
+              "samples": [
+                16.8325,
+                17.0744,
+                16.6845,
+                17.0154,
+                16.6425,
+                17.3736,
+                20.7441,
+                16.7455,
+                16.9227
+              ],
+              "p50": 16.9227,
+              "p95": 19.3959,
+              "cvPercent": 7.0554
+            },
+            "frameQuality": {
+              "status": "requires-runtime-diagnostics"
+            }
+          }
+        },
+        {
+          "scenario": "overview-docked",
+          "sidebarState": "docked",
+          "cameraPreset": "Overview",
+          "detailLevel": "overview",
+          "detailReason": "user",
+          "reduceMotion": false,
+          "queryableNodeCount": 25000,
+          "queryableEdgeCount": 59512,
+          "paintedNodeCount": 7000,
+          "paintedEdgeCount": 7000,
+          "communityAnchorCount": 100,
+          "persistentLabelCount": 8,
+          "activePromotionNodeCount": 0,
+          "gates": {
+            "overviewPaintBudget": {
+              "status": "pass",
+              "budget": 7000,
+              "allowance": 0,
+              "limit": 7000,
+              "observed": 7000
+            }
+          },
+          "metrics": {
+            "staticLayerPlanMs": {
+              "scope": "pure-presentation-planner",
+              "samples": [
+                17.7592,
+                18.0952,
+                18.424,
+                16.6451,
+                17.5138,
+                17.7875,
+                16.5058,
+                16.2903,
+                16.1253
+              ],
+              "p50": 17.5138,
+              "p95": 18.2925,
+              "cvPercent": 4.6628
+            },
+            "labelAllocationMs": {
+              "scope": "pure-presentation-planner",
+              "samples": [
+                0.3974,
+                0.4049,
+                0.403,
+                0.3899,
+                0.3906,
+                0.3924,
+                0.4109,
+                0.476,
+                0.398
+              ],
+              "p50": 0.398,
+              "p95": 0.45,
+              "cvPercent": 6.2108
+            },
+            "interactionReplanMs": {
+              "scope": "pure-presentation-planner",
+              "samples": [
+                17.7592,
+                18.0952,
+                18.424,
+                16.6451,
+                17.5138,
+                17.7875,
+                16.5058,
+                16.2903,
+                16.1253
+              ],
+              "p50": 17.5138,
+              "p95": 18.2925,
+              "cvPercent": 4.6628
+            },
+            "frameQuality": {
+              "status": "requires-runtime-diagnostics"
+            }
+          }
+        },
+        {
+          "scenario": "community",
+          "sidebarState": "collapsed",
+          "cameraPreset": "Community",
+          "detailLevel": "overview",
+          "detailReason": "user",
+          "reduceMotion": false,
+          "queryableNodeCount": 25000,
+          "queryableEdgeCount": 59512,
+          "paintedNodeCount": 7001,
+          "paintedEdgeCount": 7000,
+          "communityAnchorCount": 100,
+          "persistentLabelCount": 14,
+          "activePromotionNodeCount": 1,
+          "gates": {
+            "overviewPaintBudget": {
+              "status": "pass",
+              "budget": 7000,
+              "allowance": 1,
+              "limit": 7001,
+              "observed": 7001
+            }
+          },
+          "metrics": {
+            "staticLayerPlanMs": {
+              "scope": "pure-presentation-planner",
+              "samples": [
+                16.6522,
+                16.7553,
+                16.5852,
+                16.0954,
+                16.7802,
+                16.3224,
+                16.5123,
+                18.2083,
+                16.1692
+              ],
+              "p50": 16.5852,
+              "p95": 17.6371,
+              "cvPercent": 3.5306
+            },
+            "labelAllocationMs": {
+              "scope": "pure-presentation-planner",
+              "samples": [
+                0.392,
+                0.4028,
+                0.4019,
+                0.3957,
+                0.3996,
+                0.3954,
+                0.4097,
+                0.4008,
+                0.3967
+              ],
+              "p50": 0.3996,
+              "p95": 0.4069,
+              "cvPercent": 1.2313
+            },
+            "interactionReplanMs": {
+              "scope": "pure-presentation-planner",
+              "samples": [
+                16.6522,
+                16.7553,
+                16.5852,
+                16.0954,
+                16.7802,
+                16.3224,
+                16.5123,
+                18.2083,
+                16.1692
+              ],
+              "p50": 16.5852,
+              "p95": 17.6371,
+              "cvPercent": 3.5306
+            },
+            "frameQuality": {
+              "status": "requires-runtime-diagnostics"
+            }
+          }
+        },
+        {
+          "scenario": "node-focus",
+          "sidebarState": "collapsed",
+          "cameraPreset": "Node Focus",
+          "detailLevel": "overview",
+          "detailReason": "user",
+          "reduceMotion": false,
+          "queryableNodeCount": 25000,
+          "queryableEdgeCount": 59512,
+          "paintedNodeCount": 7001,
+          "paintedEdgeCount": 7000,
+          "communityAnchorCount": 100,
+          "persistentLabelCount": 14,
+          "activePromotionNodeCount": 1,
+          "gates": {
+            "overviewPaintBudget": {
+              "status": "pass",
+              "budget": 7000,
+              "allowance": 1,
+              "limit": 7001,
+              "observed": 7001
+            }
+          },
+          "metrics": {
+            "staticLayerPlanMs": {
+              "scope": "pure-presentation-planner",
+              "samples": [
+                16.4385,
+                17.5704,
+                16.2252,
+                16.4602,
+                16.356,
+                16.5227,
+                16.6147,
+                16.3992,
+                17.9433
+              ],
+              "p50": 16.4602,
+              "p95": 17.7941,
+              "cvPercent": 3.3918
+            },
+            "labelAllocationMs": {
+              "scope": "pure-presentation-planner",
+              "samples": [
+                0.4262,
+                0.4198,
+                0.4,
+                0.3957,
+                0.405,
+                0.4029,
+                0.3971,
+                0.3879,
+                0.4367
+              ],
+              "p50": 0.4029,
+              "p95": 0.4325,
+              "cvPercent": 3.7188
+            },
+            "interactionReplanMs": {
+              "scope": "pure-presentation-planner",
+              "samples": [
+                16.4385,
+                17.5704,
+                16.2252,
+                16.4602,
+                16.356,
+                16.5227,
+                16.6147,
+                16.3992,
+                17.9433
+              ],
+              "p50": 16.4602,
+              "p95": 17.7941,
+              "cvPercent": 3.3918
+            },
+            "frameQuality": {
+              "status": "requires-runtime-diagnostics"
+            }
+          }
+        },
+        {
+          "scenario": "path",
+          "sidebarState": "collapsed",
+          "cameraPreset": "Active Path",
+          "detailLevel": "overview",
+          "detailReason": "user",
+          "reduceMotion": false,
+          "queryableNodeCount": 25000,
+          "queryableEdgeCount": 59512,
+          "paintedNodeCount": 7005,
+          "paintedEdgeCount": 7000,
+          "communityAnchorCount": 100,
+          "persistentLabelCount": 14,
+          "activePromotionNodeCount": 5,
+          "gates": {
+            "overviewPaintBudget": {
+              "status": "pass",
+              "budget": 7000,
+              "allowance": 5,
+              "limit": 7005,
+              "observed": 7005
+            }
+          },
+          "metrics": {
+            "staticLayerPlanMs": {
+              "scope": "pure-presentation-planner",
+              "samples": [
+                16.493,
+                16.9249,
+                16.3927,
+                17.6927,
+                16.3075,
+                16.7535,
+                16.3168,
+                16.3223,
+                16.4319
+              ],
+              "p50": 16.4319,
+              "p95": 17.3856,
+              "cvPercent": 2.5694
+            },
+            "labelAllocationMs": {
+              "scope": "pure-presentation-planner",
+              "samples": [
+                0.395,
+                0.3928,
+                0.391,
+                0.3978,
+                0.4033,
+                0.3925,
+                0.3919,
+                0.3919,
+                0.393
+              ],
+              "p50": 0.3928,
+              "p95": 0.4011,
+              "cvPercent": 0.9397
+            },
+            "interactionReplanMs": {
+              "scope": "pure-presentation-planner",
+              "samples": [
+                16.493,
+                16.9249,
+                16.3927,
+                17.6927,
+                16.3075,
+                16.7535,
+                16.3168,
+                16.3223,
+                16.4319
+              ],
+              "p50": 16.4319,
+              "p95": 17.3856,
+              "cvPercent": 2.5694
+            },
+            "frameQuality": {
+              "status": "requires-runtime-diagnostics"
+            }
+          }
+        },
+        {
+          "scenario": "recent",
+          "sidebarState": "collapsed",
+          "cameraPreset": "Recent Orbit",
+          "detailLevel": "overview",
+          "detailReason": "user",
+          "reduceMotion": false,
+          "queryableNodeCount": 25000,
+          "queryableEdgeCount": 59512,
+          "paintedNodeCount": 7001,
+          "paintedEdgeCount": 7000,
+          "communityAnchorCount": 100,
+          "persistentLabelCount": 14,
+          "activePromotionNodeCount": 7,
+          "gates": {
+            "overviewPaintBudget": {
+              "status": "pass",
+              "budget": 7000,
+              "allowance": 7,
+              "limit": 7007,
+              "observed": 7001
+            }
+          },
+          "metrics": {
+            "staticLayerPlanMs": {
+              "scope": "pure-presentation-planner",
+              "samples": [
+                16.6641,
+                16.6662,
+                16.5419,
+                16.6856,
+                17.5666,
+                16.7352,
+                16.7373,
+                16.8911,
+                16.404
+              ],
+              "p50": 16.6856,
+              "p95": 17.2964,
+              "cvPercent": 1.8507
+            },
+            "labelAllocationMs": {
+              "scope": "pure-presentation-planner",
+              "samples": [
+                0.4,
+                0.3951,
+                0.3988,
+                0.399,
+                0.3988,
+                0.4018,
+                0.4096,
+                0.4068,
+                0.4006
+              ],
+              "p50": 0.4,
+              "p95": 0.4085,
+              "cvPercent": 1.0393
+            },
+            "interactionReplanMs": {
+              "scope": "pure-presentation-planner",
+              "samples": [
+                16.6641,
+                16.6662,
+                16.5419,
+                16.6856,
+                17.5666,
+                16.7352,
+                16.7373,
+                16.8911,
+                16.404
+              ],
+              "p50": 16.6856,
+              "p95": 17.2964,
+              "cvPercent": 1.8507
+            },
+            "frameQuality": {
+              "status": "requires-runtime-diagnostics"
+            }
+          }
+        },
+        {
+          "scenario": "narrow-overlay",
+          "sidebarState": "overlay",
+          "cameraPreset": "Overview",
+          "detailLevel": "overview",
+          "detailReason": "user",
+          "reduceMotion": false,
+          "queryableNodeCount": 25000,
+          "queryableEdgeCount": 59512,
+          "paintedNodeCount": 7000,
+          "paintedEdgeCount": 7000,
+          "communityAnchorCount": 100,
+          "persistentLabelCount": 8,
+          "activePromotionNodeCount": 0,
+          "gates": {
+            "overviewPaintBudget": {
+              "status": "pass",
+              "budget": 7000,
+              "allowance": 0,
+              "limit": 7000,
+              "observed": 7000
+            }
+          },
+          "metrics": {
+            "staticLayerPlanMs": {
+              "scope": "pure-presentation-planner",
+              "samples": [
+                16.9857,
+                16.6256,
+                16.5765,
+                16.5115,
+                16.2463,
+                17.613,
+                16.2636,
+                15.8623,
+                16.3142
+              ],
+              "p50": 16.5115,
+              "p95": 17.3621,
+              "cvPercent": 2.8689
+            },
+            "labelAllocationMs": {
+              "scope": "pure-presentation-planner",
+              "samples": [
+                0.4096,
+                0.3947,
+                0.4095,
+                0.3923,
+                0.393,
+                0.393,
+                0.3904,
+                0.3912,
+                0.3914
+              ],
+              "p50": 0.393,
+              "p95": 0.4095,
+              "cvPercent": 1.8337
+            },
+            "interactionReplanMs": {
+              "scope": "pure-presentation-planner",
+              "samples": [
+                16.9857,
+                16.6256,
+                16.5765,
+                16.5115,
+                16.2463,
+                17.613,
+                16.2636,
+                15.8623,
+                16.3142
+              ],
+              "p50": 16.5115,
+              "p95": 17.3621,
+              "cvPercent": 2.8689
+            },
+            "frameQuality": {
+              "status": "requires-runtime-diagnostics"
+            }
+          }
+        },
+        {
+          "scenario": "reduce-motion",
+          "sidebarState": "collapsed",
+          "cameraPreset": "Overview",
+          "detailLevel": "overview",
+          "detailReason": "user",
+          "reduceMotion": true,
+          "queryableNodeCount": 25000,
+          "queryableEdgeCount": 59512,
+          "paintedNodeCount": 7000,
+          "paintedEdgeCount": 7000,
+          "communityAnchorCount": 100,
+          "persistentLabelCount": 8,
+          "activePromotionNodeCount": 0,
+          "gates": {
+            "overviewPaintBudget": {
+              "status": "pass",
+              "budget": 7000,
+              "allowance": 0,
+              "limit": 7000,
+              "observed": 7000
+            }
+          },
+          "metrics": {
+            "staticLayerPlanMs": {
+              "scope": "pure-presentation-planner",
+              "samples": [
+                16.8563,
+                16.9024,
+                16.7721,
+                16.627,
+                16.2598,
+                16.6708,
+                19.4358,
+                16.5331,
+                16.5443
+              ],
+              "p50": 16.6708,
+              "p95": 18.4224,
+              "cvPercent": 5.2819
+            },
+            "labelAllocationMs": {
+              "scope": "pure-presentation-planner",
+              "samples": [
+                0.4159,
+                0.4086,
+                0.3983,
+                0.4041,
+                0.41,
+                0.4016,
+                0.3979,
+                0.3933,
+                0.5205
+              ],
+              "p50": 0.4041,
+              "p95": 0.4786,
+              "cvPercent": 8.9453
+            },
+            "interactionReplanMs": {
+              "scope": "pure-presentation-planner",
+              "samples": [
+                16.8563,
+                16.9024,
+                16.7721,
+                16.627,
+                16.2598,
+                16.6708,
+                19.4358,
+                16.5331,
+                16.5443
+              ],
+              "p50": 16.6708,
+              "p95": 18.4224,
+              "cvPercent": 5.2819
+            },
+            "frameQuality": {
+              "status": "requires-runtime-diagnostics"
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
