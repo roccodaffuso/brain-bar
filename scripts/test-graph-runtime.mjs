@@ -22,6 +22,13 @@ const fixture = JSON.parse(readFileSync(join(root, 'BrainBarTests/Fixtures/graph
 const graph3dSource = readFileSync(join(root, 'BrainBar/Resources/Graph3D/graph3d.js'), 'utf8');
 const graph2dSource = readFileSync(join(root, 'BrainBar/Resources/Graph2D/brainbar-graph-runtime.js'), 'utf8');
 
+function graph3dNamedFunctionSource(name) {
+  const start = graph3dSource.indexOf(`function ${name}(`);
+  assert.notEqual(start, -1, `Missing Graph3D function: ${name}`);
+  const end = graph3dSource.indexOf('\nfunction ', start + 1);
+  return graph3dSource.slice(start, end === -1 ? graph3dSource.length : end);
+}
+
 assert.ok(graph2dSource.includes('brainBarApplyGraphSessionState'));
 assert.ok(graph2dSource.includes('brainBarGraphSessionSnapshot'));
 assert.ok(graph3dSource.includes('brainBarApplyGraphSessionState'));
@@ -216,15 +223,23 @@ assert.throws(
 
 const layoutCacheDigest = 'a'.repeat(64);
 const layoutCacheCoordinates = new Float64Array([1.5, -2, 3.25, 4, 5.5, -6]);
+const layoutCacheMetadata = {
+  communityCount: 1,
+  communityIndexByNode: new Uint32Array([0, 0]).buffer,
+  communityCenters: new Float64Array([0, 0, 0]).buffer,
+  communityBounds: new Float64Array([-10, 10, -10, 10, -10, 10]).buffer,
+  structuralRanks: new Uint32Array([0, 1]).buffer
+};
 const validLayoutCacheRecord = graph3dLayoutCache.layoutCacheRecord({
   digest: layoutCacheDigest,
   lens: 'unexpected-lens',
   nodeCount: 2,
-  coordinates: layoutCacheCoordinates.buffer
+  coordinates: layoutCacheCoordinates.buffer,
+  communityLayout: layoutCacheMetadata
 });
-assert.equal(graph3dLayout.graph3dLayoutSchemaVersion, 2);
-assert.equal(graph3dLayoutCache.layoutCacheSchemaVersion, 2);
-assert.equal(validLayoutCacheRecord.key, `2:${layoutCacheDigest}:all`);
+assert.equal(graph3dLayout.graph3dLayoutSchemaVersion, 4);
+assert.equal(graph3dLayoutCache.layoutCacheSchemaVersion, 4);
+assert.equal(validLayoutCacheRecord.key, `4:${layoutCacheDigest}:all`);
 assert.equal(validLayoutCacheRecord.lens, 'all');
 assert.deepEqual(
   [...graph3dLayoutCache.validateLayoutCacheRecord(validLayoutCacheRecord, {
@@ -247,9 +262,36 @@ assert.equal(
     digest: layoutCacheDigest,
     lens: 'all',
     nodeCount: 2,
-    coordinates: nonFiniteCoordinates.buffer
+    coordinates: nonFiniteCoordinates.buffer,
+    communityLayout: layoutCacheMetadata
   }),
   null
+);
+assert.equal(
+  graph3dLayoutCache.layoutCacheRecord({
+    digest: layoutCacheDigest,
+    lens: 'all',
+    nodeCount: 2,
+    coordinates: layoutCacheCoordinates.buffer
+  }),
+  null,
+  'schema 2 cache never accepts coordinates without community metadata'
+);
+assert.equal(
+  graph3dLayoutCache.validateLayoutCacheLayout(
+    { ...validLayoutCacheRecord, structuralRanks: new ArrayBuffer(0) },
+    { digest: layoutCacheDigest, lens: 'all', nodeCount: 2 }
+  ),
+  null,
+  'corrupt metadata invalidates the complete cache record'
+);
+assert.equal(
+  graph3dLayoutCache.validateLayoutCacheLayout(
+    { ...validLayoutCacheRecord, communityBounds: new Float64Array([10, -10, -10, 10, -10, 10]).buffer },
+    { digest: layoutCacheDigest, lens: 'all', nodeCount: 2 }
+  ),
+  null,
+  'inverted community bounds invalidate the complete cache record'
 );
 assert.equal(graph3dLayoutCache.layoutCacheKey({ digest: 'not-a-sha', lens: 'all' }), '');
 assert.equal(
@@ -979,7 +1021,16 @@ assert.match(graph3dSource, /layout-worker-mode/);
 assert.match(graph3dSource, /__brainBarLayoutWorkerTestRelease/);
 assert.match(graph3dSource, /if \(!state\.graph\) \{[\s\S]*pendingGraphGeneration[\s\S]*return false;/);
 assert.match(graph3dSource, /event: 'graphReady',[\s\S]*generation: layoutContext\.graphGeneration,[\s\S]*lens: layoutContext\.lens/);
-assert.match(graph3dSource, /if \(isCurrentLayoutContext\(context\)\) \{\s*state\.layoutState = 'failed';\s*failLayout\(\);/);
+const finishLayoutFailureSource = graph3dNamedFunctionSource('finishLayoutFailure');
+const failLayoutSource = graph3dNamedFunctionSource('failLayout');
+const isCurrentLayoutContextSource = graph3dNamedFunctionSource('isCurrentLayoutContext');
+const cancelActiveLayoutRequestSource = graph3dNamedFunctionSource('cancelActiveLayoutRequest');
+assert.match(finishLayoutFailureSource, /if \(isCurrentLayoutContext\(context\)\) \{\s*state\.layoutState = 'failed';\s*failLayout\(context\);/);
+assert.match(failLayoutSource, /if \(context && state\.pendingLayoutContext === context && context\.rollbackSnapshot\) \{[\s\S]*restoreTransactionalGraphState\(context\.rollbackSnapshot\);[\s\S]*state\.pendingLayoutContext = null;[\s\S]*state\.layoutState = 'committed';[\s\S]*window\.__brainBarGraphReady = true;[\s\S]*3D graph refresh could not be completed\. Retry\./);
+assert.match(failLayoutSource, /window\.__brainBarGraphReady = false;[\s\S]*3D graph layout could not be completed\. Retry\./);
+assert.match(isCurrentLayoutContextSource, /state\.pendingLayoutContext === context[\s\S]*context\.graphGeneration === state\.graphGeneration[\s\S]*context\.epoch === state\.layoutEpoch/);
+assert.match(isCurrentLayoutContextSource, /context\.lens === state\.lens[\s\S]*context\.visibleGraphRevision === state\.visibleGraphRevision[\s\S]*context\.epoch === state\.layoutEpoch/);
+assert.match(cancelActiveLayoutRequestSource, /state\.pendingLayoutContext === request\.context[\s\S]*state\.pendingLayoutContext = null;/);
 assert.match(graph3dWorkerSource, /self\.postMessage\(\{ type: 'ready' \}\)/);
 assert.match(graph3dWorkerSource, /positions: layout\.positions\.buffer/);
 assert.match(graph3dWorkerSource, /\[\s*layout\.positions\.buffer,[\s\S]*layout\.structuralRanks\.buffer\s*\]/);
@@ -989,8 +1040,8 @@ assert.match(graph3dWorkerSource, /communityCenters: layout\.communityCenters\.b
 assert.match(graph3dWorkerSource, /communityBounds: layout\.communityBounds\.buffer/);
 assert.match(graph3dWorkerSource, /structuralRanks: layout\.structuralRanks\.buffer/);
 assert.match(graph3dWorkerSource, /communityCount: layout\.communityCount/);
-assert.equal(graph3dPresentation.adaptiveDetailLevel(2500), 'balanced');
-assert.equal(graph3dPresentation.adaptiveDetailLevel(2501), 'overview');
+assert.equal(graph3dPresentation.adaptiveDetailLevel(16000), 'balanced');
+assert.equal(graph3dPresentation.adaptiveDetailLevel(16001), 'overview');
 assert.match(graph3dSource, /function clearInteractiveModes[\s\S]*clearFocusOrbit\(false\)[\s\S]*clearPathMode\(false\)[\s\S]*clearGraphStory\(false\)/);
 assert.match(graph3dSource, /Compare paths/);
 assert.match(graph3dSource, /No route found/);

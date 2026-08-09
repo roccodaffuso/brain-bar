@@ -1,9 +1,9 @@
 # BrainBar 3D Visual and Spatial Redesign
 
-Status: implementation specification  
+Status: implemented and visually accepted for local preview
 Product scope: post-0.10 BrainBar 3D Focus Window  
-Decision state: approved for planning; implementation not started  
-Last updated: 2026-08-08
+Decision state: implementation boundary accepted
+Last updated: 2026-08-09
 
 ## Executive summary
 
@@ -34,7 +34,7 @@ The current renderer has strong foundations:
 - the layout cache reuses coordinates by graph digest, lens, and schema;
 - the complete graph remains queryable;
 - the renderer exposes content-free diagnostics;
-- an orthographic camera provides predictable navigation;
+- a perspective camera provides an unambiguous spatial reading while semantic presets preserve predictable navigation;
 - degree affects node radius and depth affects presence;
 - active modes dim unrelated content;
 - labels, paths, workflows, activity, recent notes, and hub glows use separate visual layers.
@@ -198,7 +198,7 @@ The first implementation does not draw permanent hulls. Community identity comes
 
 ### 5.3 Depth model
 
-The first redesign retains the orthographic camera to protect navigation predictability, Saved View compatibility, and projection logic. Depth becomes more legible through:
+The owner-rejected first implementation showed that an orthographic camera makes the dense real vault read as a flat diagram. The accepted redesign uses a perspective camera with explicit framing and preserves camera position/target/zoom session compatibility. Depth becomes more legible through:
 
 - deterministic community depth bands;
 - bounded local depth variation;
@@ -207,7 +207,7 @@ The first redesign retains the orthographic camera to protect navigation predict
 - parallax during orbit;
 - optional low-contrast guides in active community mode.
 
-Perspective projection is a separate experiment. It requires camera-state migration and a matched usability comparison before adoption.
+Perspective projection is the accepted rendering path. It requires matched usability and session compatibility checks before final acceptance.
 
 ### 5.4 Determinism and cache identity
 
@@ -234,11 +234,11 @@ Viewport width, sidebar width, and transient detail level must not enter the coo
 
 Adaptive starting behavior:
 
-- graphs up to 2,500 nodes start in Balanced;
-- larger graphs start in Overview;
+- graphs up to 16,000 nodes start in Balanced; this keeps a 12–13k vault at 65–80% painted density without selecting Full;
+- graphs above 16,000 nodes start in bounded Overview (7,000 nodes and 7,000 edges); Balanced is bounded at 10,000 nodes and 12,000 edges;
 - Saved Views may restore an explicit level.
 
-These thresholds are provisional until baseline review.
+These thresholds are accepted by the visual and 25k bounded-plan gates.
 
 ### 6.2 Queryable versus painted
 
@@ -725,7 +725,8 @@ Test real custom-scheme Worker load, exact queryable identities, deterministic p
 
 ### 20.4 Visual QA matrix
 
-Capture the same fixture/viewport for:
+Capture the matched core matrix on the same public 1k fixture at 1000×720,
+with the same coordinate fingerprint, for:
 
 - Overview collapsed and docked;
 - Community Spotlight;
@@ -735,8 +736,11 @@ Capture the same fixture/viewport for:
 - Agent Activity;
 - Workflow highlight;
 - Graph Check;
-- narrow-window overlay;
 - Reduce Motion.
+
+Keep the inspected-shape Overview captures as supplemental large-shape evidence.
+Capture narrow-window Overlay separately at its deliberate responsive viewport;
+it is not part of the matched core comparison.
 
 Review community separation, centering, breathing room, hierarchy, edge noise, labels, contrast, occlusion, orientation, and clipping.
 
@@ -801,14 +805,14 @@ Use priority: selection/path → workflow/activity → community → ambient. On
 
 Never move world coordinates. Reframe known presets only and preserve Manual camera unless occluded.
 
-### Orthographic depth may remain subtle
+### Perspective navigation must remain restrained
 
-Complete the depth-cue pass first. Treat Perspective as a controlled later experiment with migration, not an unbounded rewrite.
+Perspective is required to avoid a flat first impression. Camera framing, range limits, semantic Back, and Reduce Motion remain the controls that make it predictable rather than decorative.
 
 ## 23. Decisions resolved here
 
 - The redesign is post-0.10 and does not block the current release candidate.
-- The first implementation retains orthographic projection.
+- The default 3D renderer uses a bounded 48° perspective projection and an oblique Overview camera.
 - The spatial metaphor is community islands/constellations.
 - Progressive detail affects painting, never queryability.
 - Overview, Balanced, and Full are the only user-facing detail levels.
@@ -926,7 +930,20 @@ A slice is done when:
 
 The redesign is done only after Phase 5 acceptance, not when the new layout first renders. A visually attractive prototype without identity parity, recovery behavior, accessibility, performance evidence, or state migration is not a shippable BrainBar redesign.
 
-## 29. References
+## 29. Owner-correction acceptance gates
+
+The real-vault review rejected a flat, sparse Overview. The replacement implementation must prove all of the following before visual approval:
+
+- layout schema 4 coordinates have a central Y/major-axis q05–q95 span ratio of at least 0.22 on the inspected-like fixture;
+- non-primary disconnected components are packed inside a compact envelope rather than placed by a cumulative peripheral cursor;
+- the adaptive default is Balanced through 16,000 nodes, with a 12,547-node fixture painting at least 65% of identities while remaining queryable and bounded;
+- 25k starts in bounded Overview; Full remains explicit, and HUD exposes both painted and queryable counts;
+- the default camera is perspective and oblique; Fit is sidebar-safe and manual resize never mutates coordinates;
+- click hit testing follows the rendered projected layer, and double-click enters Node Focus rather than opening a note unexpectedly.
+
+The public fixture capture records the accepted frame metrics: inspected-like Overview uses Balanced with 10,000/12,547 nodes painted (79.70%), projected coverage 67.58% × 58.12% without crop; the 1k capture covers 60.15% × 69.74%. The Detail control mirrors the adaptive level, including the 1k Balanced and 25k Overview defaults.
+
+## 30. References
 
 - `BrainBar/Resources/Graph3D/graph3d.js`
 - `BrainBar/Resources/Graph3D/graph3d.css`

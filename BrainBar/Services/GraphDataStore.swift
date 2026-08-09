@@ -49,29 +49,57 @@ actor GraphDataStore {
         let sourceFile: String?
     }
 
+    private struct RadarNodeDraft: Sendable {
+        let id: String
+        let contentData: Data
+        let community: String
+        let sourceFile: String?
+        let status: String?
+        let category: String?
+        let hasExplicitAttention: Bool
+    }
+
+    private enum RadarEdgeDraft: Sendable {
+        case explicit(id: String, source: String, target: String)
+        case idless(source: String, target: String, relation: String, attributesData: Data)
+    }
+
+    private struct RadarSeedDraft: Sendable {
+        let graphDigest: String
+        let semanticFingerprint: String
+        let vaultURL: URL
+        let nodes: [RadarNodeDraft]
+        let edges: [RadarEdgeDraft]
+    }
+
     private struct PreparedGraph: Sendable {
         let handle: GraphDataHandle
         let rawData: Data
         let metadataSeeds: [NodeMetadataSeed]
-        let radarSeed: GraphChangeRadarSeed
+        let radarDraft: RadarSeedDraft
     }
 
     private struct CachedGraph {
-        let prepared: PreparedGraph
+        let generation: UUID
+        let handle: GraphDataHandle
+        let rawData: Data
         let metadataTask: Task<Data, Never>
+        let radarTask: Task<GraphChangeRadarSeed, Never>
     }
 
     private var requestToken = 0
     private var activeTask: Task<Result<PreparedGraph, GraphDataValidationCode>, Never>?
     private var cachedGraph: CachedGraph?
     private let dataLoader: DataLoader
+    private let radarTaskHook: @Sendable () async -> Void
 
     init(dataLoader: @escaping DataLoader = { url in
         await Task.detached(priority: .userInitiated) {
             try? Data(contentsOf: url)
         }.value
-    }) {
+    }, radarTaskHook: @escaping @Sendable () async -> Void = {}) {
         self.dataLoader = dataLoader
+        self.radarTaskHook = radarTaskHook
     }
 
     func prepare(url: URL, policy: GraphDataPreparePolicy) async -> GraphDataLoadResult {
@@ -82,9 +110,9 @@ actor GraphDataStore {
         if policy == .normal,
            let cachedGraph,
            let sourceSignature = Self.sourceSignatureSync(for: url),
-           sourceSignature == cachedGraph.prepared.handle.sourceSignature {
+           sourceSignature == cachedGraph.handle.sourceSignature {
             activeTask = nil
-            return .ready(cachedGraph.prepared.handle)
+            return .ready(cachedGraph.handle)
         }
 
         let dataLoader = self.dataLoader
@@ -105,8 +133,20 @@ actor GraphDataStore {
             let metadataTask = Task.detached(priority: .utility) {
                 Self.metadataData(seeds: prepared.metadataSeeds, vaultURL: metadataRootURL)
             }
+            let radarTaskHook = self.radarTaskHook
+            let radarTask = Task.detached(priority: .utility) {
+                await radarTaskHook()
+                return Self.radarSeed(from: prepared.radarDraft)
+            }
             cachedGraph?.metadataTask.cancel()
-            cachedGraph = CachedGraph(prepared: prepared, metadataTask: metadataTask)
+            cachedGraph?.radarTask.cancel()
+            cachedGraph = CachedGraph(
+                generation: UUID(),
+                handle: prepared.handle,
+                rawData: prepared.rawData,
+                metadataTask: metadataTask,
+                radarTask: radarTask
+            )
             return .ready(prepared.handle)
         case .failure(let code):
             return .failed(code)
@@ -114,26 +154,38 @@ actor GraphDataStore {
     }
 
     func resource(for handle: GraphDataHandle, kind: GraphDataResourceKind) async -> Data? {
-        guard let cachedGraph, cachedGraph.prepared.handle == handle else {
+        guard let cachedGraph, cachedGraph.handle == handle else {
             return nil
         }
+        let generation = cachedGraph.generation
         switch kind {
         case .graph:
-            return cachedGraph.prepared.rawData
+            return cachedGraph.rawData
         case .metadata:
             let metadata = await cachedGraph.metadataTask.value
-            guard let currentGraph = self.cachedGraph, currentGraph.prepared.handle == handle else {
+            guard let currentGraph = self.cachedGraph,
+                  currentGraph.generation == generation,
+                  currentGraph.handle == handle
+            else {
                 return nil
             }
             return metadata
         }
     }
 
-    func radarSeed(for handle: GraphDataHandle) -> GraphChangeRadarSeed? {
-        guard let cachedGraph, cachedGraph.prepared.handle == handle else {
+    func radarSeed(for handle: GraphDataHandle) async -> GraphChangeRadarSeed? {
+        guard let cachedGraph, cachedGraph.handle == handle else {
             return nil
         }
-        return cachedGraph.prepared.radarSeed
+        let generation = cachedGraph.generation
+        let seed = await cachedGraph.radarTask.value
+        guard let currentGraph = self.cachedGraph,
+              currentGraph.generation == generation,
+              currentGraph.handle == handle
+        else {
+            return nil
+        }
+        return seed
     }
 
     func invalidate() {
@@ -141,6 +193,7 @@ actor GraphDataStore {
         activeTask?.cancel()
         activeTask = nil
         cachedGraph?.metadataTask.cancel()
+        cachedGraph?.radarTask.cancel()
         cachedGraph = nil
     }
 
@@ -203,7 +256,7 @@ actor GraphDataStore {
         var nodeIDs = Set<String>()
         var metadataSeeds: [NodeMetadataSeed] = []
         var nodeFingerprints: [String] = []
-        var radarNodes: [GraphChangeRadarSeed.Node] = []
+        var radarNodes: [RadarNodeDraft] = []
         for (index, rawNode) in rawNodes.enumerated() {
             guard index % 256 != 0 || !Task.isCancelled else {
                 return .failure(.invalidJSON)
@@ -219,19 +272,19 @@ actor GraphDataStore {
             }
             let sourceFile = stringValue(node["source_file"]) ?? stringValue(node["_source_file"])
             metadataSeeds.append(NodeMetadataSeed(id: id, sourceFile: sourceFile))
-            guard let canonical = canonicalNode(node, id: id) else {
+            guard let canonical = canonicalNodeData(node, id: id) else {
                 return .failure(.invalidShape)
             }
-            nodeFingerprints.append(digest(Data(canonical.utf8)))
-            guard let contentHash = radarNodeContentHash(node) else {
+            nodeFingerprints.append(digest(canonical))
+            guard let contentData = radarNodeContentData(node) else {
                 return .failure(.invalidShape)
             }
             radarNodes.append(
                 .init(
                     id: id,
-                    contentHash: contentHash,
+                    contentData: contentData,
                     community: firstString(in: node, keys: ["community", "community_name", "group", "cluster"]) ?? "Unassigned",
-                    sourcePath: radarSourcePath(node["source_file"], vaultURL: vaultURL),
+                    sourceFile: stringValue(node["source_file"]),
                     status: firstString(in: node, keys: ["status"]),
                     category: firstString(in: node, keys: ["category", "type"]),
                     hasExplicitAttention: hasExplicitAttention(in: node)
@@ -241,8 +294,7 @@ actor GraphDataStore {
 
         var explicitEdgeIDs = Set<String>()
         var edgeFingerprints: [String] = []
-        var idlessEdges: [(semanticKey: String, source: String, target: String, relation: String)] = []
-        var radarEdges: [GraphChangeRadarSeed.Edge] = []
+        var radarEdges: [RadarEdgeDraft] = []
         for (index, rawEdge) in rawEdges.enumerated() {
             guard index % 256 != 0 || !Task.isCancelled else {
                 return .failure(.invalidJSON)
@@ -264,36 +316,35 @@ actor GraphDataStore {
                 guard explicitEdgeIDs.insert(id).inserted else {
                     return .failure(.duplicateEdgeID)
                 }
-                radarEdges.append(.init(identity: "id:\(id)", source: source, target: target))
+                radarEdges.append(.explicit(id: id, source: source, target: target))
             } else {
-                guard let semanticKey = radarEdgeSemanticKey(edge, source: source, target: target) else {
+                guard let attributesData = radarEdgeAttributesData(edge) else {
                     return .failure(.invalidShape)
                 }
-                idlessEdges.append((semanticKey, source, target, firstString(in: edge, keys: ["relation", "context", "type"]) ?? ""))
+                radarEdges.append(
+                    .idless(
+                        source: source,
+                        target: target,
+                        relation: firstString(in: edge, keys: ["relation", "context", "type"]) ?? "",
+                        attributesData: attributesData
+                    )
+                )
             }
 
-            guard let canonical = canonicalEdge(edge, source: source, target: target) else {
+            guard let canonical = canonicalEdgeData(edge, source: source, target: target) else {
                 return .failure(.invalidShape)
             }
-            edgeFingerprints.append(digest(Data(canonical.utf8)))
-        }
-
-        for grouped in Dictionary(grouping: idlessEdges, by: \.semanticKey) {
-            let digest = digest(Data(grouped.key.utf8))
-            for (ordinal, edge) in grouped.value.sorted(by: { ($0.source, $0.target, $0.relation) < ($1.source, $1.target, $1.relation) }).enumerated() {
-                radarEdges.append(.init(identity: "semantic:\(digest):\(ordinal)", source: edge.source, target: edge.target))
-            }
+            edgeFingerprints.append(digest(canonical))
         }
 
         nodeFingerprints.sort()
         edgeFingerprints.sort()
-        let semanticMaterial = [
-            "nodes:\(nodeFingerprints.count)",
-            nodeFingerprints.map { "node:\($0)" }.joined(separator: "\n"),
-            "edges:\(edgeFingerprints.count)",
-            edgeFingerprints.map { "edge:\($0)" }.joined(separator: "\n")
-        ].joined(separator: "\n")
-        let semanticFingerprint = digest(Data(semanticMaterial.utf8))
+        let semanticFingerprint = digest(
+            semanticFingerprintMaterial(
+                nodeFingerprints: nodeFingerprints,
+                edgeFingerprints: edgeFingerprints
+            )
+        )
         let counts = GraphDataCounts(nodes: rawNodes.count, edges: rawEdges.count)
         let handle = GraphDataHandle(
             digest: digest(rawData),
@@ -306,11 +357,12 @@ actor GraphDataStore {
                 handle: handle,
                 rawData: rawData,
                 metadataSeeds: metadataSeeds,
-                radarSeed: .init(
+                radarDraft: .init(
                     graphDigest: handle.digest,
                     semanticFingerprint: handle.semanticFingerprint,
-                    nodes: radarNodes.sorted { $0.id < $1.id },
-                    edges: radarEdges.sorted { $0.identity < $1.identity }
+                    vaultURL: vaultURL,
+                    nodes: radarNodes,
+                    edges: radarEdges
                 )
             )
         )
@@ -345,7 +397,13 @@ actor GraphDataStore {
         return first
     }
 
-    private static func canonicalEdge(_ edge: [String: Any], source: String, target: String) -> String? {
+    private static func canonicalEdgeData(_ edge: [String: Any], source: String, target: String) -> Data? {
+        if edge["source"] as? String == source,
+           edge["target"] as? String == target,
+           edge["from"] == nil,
+           edge["to"] == nil {
+            return try? JSONSerialization.data(withJSONObject: edge, options: [.sortedKeys])
+        }
         var normalized = edge
         normalized.removeValue(forKey: "source")
         normalized.removeValue(forKey: "from")
@@ -353,77 +411,98 @@ actor GraphDataStore {
         normalized.removeValue(forKey: "to")
         normalized["source"] = source
         normalized["target"] = target
-        guard
-            let data = try? JSONSerialization.data(withJSONObject: normalized, options: [.sortedKeys]),
-            let string = String(data: data, encoding: .utf8)
-        else {
-            return nil
-        }
-        return string
+        return try? JSONSerialization.data(withJSONObject: normalized, options: [.sortedKeys])
     }
 
-    private static func canonicalNode(_ node: [String: Any], id: String) -> String? {
+    private static func canonicalNodeData(_ node: [String: Any], id: String) -> Data? {
+        if node["id"] as? String == id {
+            return try? JSONSerialization.data(withJSONObject: node, options: [.sortedKeys])
+        }
         var normalized = node
         normalized["id"] = id
-        guard
-            let data = try? JSONSerialization.data(withJSONObject: normalized, options: [.sortedKeys]),
-            let string = String(data: data, encoding: .utf8)
-        else {
-            return nil
-        }
-        return string
+        return try? JSONSerialization.data(withJSONObject: normalized, options: [.sortedKeys])
     }
 
-    private static func radarNodeContentHash(_ node: [String: Any]) -> String? {
+    private static func radarNodeContentData(_ node: [String: Any]) -> Data? {
         var normalized = node
         ["id", "community", "community_name", "group", "cluster"].forEach { normalized.removeValue(forKey: $0) }
-        return canonicalRadarJSON(normalized).map { digest(Data($0.utf8)) }
+        return canonicalRadarJSONData(normalized)
     }
 
-    private static func radarEdgeSemanticKey(_ edge: [String: Any], source: String, target: String) -> String? {
+    private static func radarEdgeAttributesData(_ edge: [String: Any]) -> Data? {
         var attributes = edge
         ["id", "source", "from", "target", "to", "relation", "context", "type"].forEach { attributes.removeValue(forKey: $0) }
-        guard let body = canonicalRadarJSON(attributes) else {
-            return nil
-        }
-        let relation = firstString(in: edge, keys: ["relation", "context", "type"]) ?? ""
-        return [source, target, relation, body].joined(separator: "\u{1F}")
+        return canonicalRadarJSONData(attributes)
     }
 
-    private static func canonicalRadarJSON(_ object: Any) -> String? {
+    private static func canonicalRadarJSONData(_ object: Any) -> Data? {
         switch object {
         case let dictionary as [String: Any]:
-            let members = dictionary.keys.sorted().compactMap { key -> String? in
+            var result = Data("{".utf8)
+            for (index, key) in dictionary.keys.sorted().enumerated() {
                 guard let value = dictionary[key],
-                      let canonicalValue = canonicalRadarJSON(value)
+                      let canonicalValue = canonicalRadarJSONData(value)
                 else {
                     return nil
                 }
-                let canonicalKey = canonicalRadarString(key)
-                return "\(canonicalKey):\(canonicalValue)"
+                if index > 0 {
+                    result.append(UInt8(ascii: ","))
+                }
+                result.append(contentsOf: canonicalRadarString(key).utf8)
+                result.append(UInt8(ascii: ":"))
+                result.append(canonicalValue)
             }
-            guard members.count == dictionary.count else {
-                return nil
-            }
-            return "{\(members.joined(separator: ","))}"
+            result.append(UInt8(ascii: "}"))
+            return result
         case let array as [Any]:
-            let values = array.compactMap(canonicalRadarJSON)
-            guard values.count == array.count else {
-                return nil
+            var result = Data("[".utf8)
+            for (index, value) in array.enumerated() {
+                guard let canonicalValue = canonicalRadarJSONData(value) else {
+                    return nil
+                }
+                if index > 0 {
+                    result.append(UInt8(ascii: ","))
+                }
+                result.append(canonicalValue)
             }
-            return "[\(values.joined(separator: ","))]"
+            result.append(UInt8(ascii: "]"))
+            return result
         case let string as String:
-            return canonicalRadarString(string)
+            return Data(canonicalRadarString(string).utf8)
         case let number as NSNumber:
             if CFGetTypeID(number) == CFBooleanGetTypeID() {
-                return number.boolValue ? "true" : "false"
+                return Data((number.boolValue ? "true" : "false").utf8)
             }
-            return number.doubleValue.isFinite ? number.stringValue : nil
+            return number.doubleValue.isFinite ? Data(number.stringValue.utf8) : nil
         case _ as NSNull:
-            return "null"
+            return Data("null".utf8)
         default:
             return nil
         }
+    }
+
+    private static func semanticFingerprintMaterial(
+        nodeFingerprints: [String],
+        edgeFingerprints: [String]
+    ) -> Data {
+        var material = Data()
+        material.reserveCapacity((nodeFingerprints.count + edgeFingerprints.count) * 70 + 64)
+        material.append(contentsOf: "nodes:\(nodeFingerprints.count)\n".utf8)
+        for (index, fingerprint) in nodeFingerprints.enumerated() {
+            if index > 0 {
+                material.append(UInt8(ascii: "\n"))
+            }
+            material.append(contentsOf: "node:\(fingerprint)".utf8)
+        }
+        material.append(UInt8(ascii: "\n"))
+        material.append(contentsOf: "edges:\(edgeFingerprints.count)\n".utf8)
+        for (index, fingerprint) in edgeFingerprints.enumerated() {
+            if index > 0 {
+                material.append(UInt8(ascii: "\n"))
+            }
+            material.append(contentsOf: "edge:\(fingerprint)".utf8)
+        }
+        return material
     }
 
     private static func canonicalRadarString(_ string: String) -> String {
@@ -472,13 +551,72 @@ actor GraphDataStore {
         return ["pending", "review", "needs_attention", "needs-attention", "needs attention", "open"].contains(status)
     }
 
-    private static func radarSourcePath(_ value: Any?, vaultURL: URL) -> String? {
-        guard let sourceFile = stringValue(value),
-              let fileURL = resolvedVaultFileURL(sourceFile, vaultURL: vaultURL)
+    private static func radarSeed(from draft: RadarSeedDraft) -> GraphChangeRadarSeed {
+        let resolvedVaultURL = draft.vaultURL.resolvingSymlinksInPath().standardizedFileURL
+        var nodes: [GraphChangeRadarSeed.Node] = []
+        nodes.reserveCapacity(draft.nodes.count)
+        for (index, node) in draft.nodes.enumerated() {
+            guard index % 256 != 0 || !Task.isCancelled else {
+                return .init(
+                    graphDigest: draft.graphDigest,
+                    semanticFingerprint: draft.semanticFingerprint,
+                    nodes: [],
+                    edges: []
+                )
+            }
+            nodes.append(
+                .init(
+                    id: node.id,
+                    contentHash: digest(node.contentData),
+                    community: node.community,
+                    sourcePath: radarSourcePath(node.sourceFile, resolvedVaultURL: resolvedVaultURL),
+                    status: node.status,
+                    category: node.category,
+                    hasExplicitAttention: node.hasExplicitAttention
+                )
+            )
+        }
+
+        var edges: [GraphChangeRadarSeed.Edge] = []
+        var idlessEdges: [String: [(source: String, target: String, relation: String)]] = [:]
+        for (index, edge) in draft.edges.enumerated() {
+            guard index % 256 != 0 || !Task.isCancelled else {
+                return .init(
+                    graphDigest: draft.graphDigest,
+                    semanticFingerprint: draft.semanticFingerprint,
+                    nodes: [],
+                    edges: []
+                )
+            }
+            switch edge {
+            case let .explicit(id, source, target):
+                edges.append(.init(identity: "id:\(id)", source: source, target: target))
+            case let .idless(source, target, relation, attributesData):
+                let semanticKey = [source, target, relation, String(decoding: attributesData, as: UTF8.self)]
+                    .joined(separator: "\u{1F}")
+                idlessEdges[semanticKey, default: []].append((source, target, relation))
+            }
+        }
+        for grouped in idlessEdges {
+            let digest = digest(Data(grouped.key.utf8))
+            for (ordinal, edge) in grouped.value.sorted(by: { ($0.source, $0.target, $0.relation) < ($1.source, $1.target, $1.relation) }).enumerated() {
+                edges.append(.init(identity: "semantic:\(digest):\(ordinal)", source: edge.source, target: edge.target))
+            }
+        }
+        return .init(
+            graphDigest: draft.graphDigest,
+            semanticFingerprint: draft.semanticFingerprint,
+            nodes: nodes.sorted { $0.id < $1.id },
+            edges: edges.sorted { $0.identity < $1.identity }
+        )
+    }
+
+    private static func radarSourcePath(_ sourceFile: String?, resolvedVaultURL: URL) -> String? {
+        guard let sourceFile,
+              let fileURL = resolvedVaultFileURL(sourceFile, resolvedVaultURL: resolvedVaultURL)
         else {
             return nil
         }
-        let resolvedVaultURL = vaultURL.resolvingSymlinksInPath().standardizedFileURL
         let prefix = resolvedVaultURL.path.hasSuffix("/") ? resolvedVaultURL.path : resolvedVaultURL.path + "/"
         guard fileURL.path.hasPrefix(prefix) else {
             return nil
@@ -527,12 +665,18 @@ actor GraphDataStore {
     }
 
     private static func resolvedVaultFileURL(_ sourceFile: String, vaultURL: URL) -> URL? {
+        resolvedVaultFileURL(
+            sourceFile,
+            resolvedVaultURL: vaultURL.resolvingSymlinksInPath().standardizedFileURL
+        )
+    }
+
+    private static func resolvedVaultFileURL(_ sourceFile: String, resolvedVaultURL: URL) -> URL? {
         guard !sourceFile.hasPrefix("/"),
               !sourceFile.split(separator: "/").contains(where: { $0 == ".." })
         else {
             return nil
         }
-        let resolvedVaultURL = vaultURL.resolvingSymlinksInPath().standardizedFileURL
         let resolved = resolvedVaultURL
             .appendingPathComponent(sourceFile)
             .resolvingSymlinksInPath()
@@ -542,6 +686,7 @@ actor GraphDataStore {
         }
         return resolved
     }
+
 
     private static func digest(_ data: Data) -> String {
         var hexadecimal = [UInt8]()

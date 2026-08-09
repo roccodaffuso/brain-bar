@@ -3281,12 +3281,24 @@
 
     function graphSessionSnapshot2D() {
       const pending = root.__brainBarPendingSessionState || {};
+      // 2D does not render these presentation fields, but must round-trip them
+      // verbatim so changing workbench never resets the 3D composition.
+      const presentation = Number(pending.schemaVersion) === 2 ? {
+        detailLevel: pending.detailLevel,
+        detailReason: pending.detailReason,
+        sidebarState: pending.sidebarState,
+        sidebarWidth: pending.sidebarWidth,
+        cameraPreset: pending.cameraPreset,
+        cameraHistory: Array.isArray(pending.cameraHistory) ? pending.cameraHistory : [],
+        reduceMotion: Boolean(pending.reduceMotion)
+      } : {};
       const focus = root.__brainBarFocusState;
       const network = graphNetwork();
       const selectedNodeId = network?.getSelectedNodes?.()?.[0];
       const activeMode = String(root.__brainBarActiveGraphView || 'global');
       return {
-        schemaVersion: 1,
+        ...presentation,
+        schemaVersion: Number(pending.schemaVersion) === 2 ? 2 : 1,
         graphVersion: pending.graphVersion || null,
         selectedNodeID: network
           ? (selectedNodeId != null ? String(selectedNodeId) : (activeMode === 'global' ? null : (pending.selectedNodeID || null)))
@@ -3326,8 +3338,9 @@
     }
 
     root.brainBarApplyGraphSessionState = (value) => {
-      const session = value && typeof value === 'object' && Number(value.schemaVersion) === 1
-        ? { ...value, schemaVersion: 1 }
+      const schemaVersion = Number(value?.schemaVersion);
+      const session = value && typeof value === 'object' && (schemaVersion === 1 || schemaVersion === 2)
+        ? { ...value, schemaVersion }
         : null;
       if (!session) {
         return false;

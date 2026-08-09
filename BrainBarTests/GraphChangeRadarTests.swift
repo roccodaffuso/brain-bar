@@ -2,7 +2,53 @@ import Foundation
 import XCTest
 @testable import BrainBar
 
+private actor RadarSeedGate {
+    private var entered = false
+    private var entryWaiters: [CheckedContinuation<Void, Never>] = []
+    private var resumeContinuation: CheckedContinuation<Void, Never>?
+
+    func wait() async {
+        entered = true
+        let waiters = entryWaiters
+        entryWaiters.removeAll()
+        waiters.forEach { $0.resume() }
+        await withCheckedContinuation { resumeContinuation = $0 }
+    }
+
+    func waitUntilEntered() async {
+        guard !entered else { return }
+        await withCheckedContinuation { entryWaiters.append($0) }
+    }
+
+    func resume() {
+        resumeContinuation?.resume()
+        resumeContinuation = nil
+    }
+}
+
 final class GraphChangeRadarTests: XCTestCase {
+    func testPrepareReturnsReadyWhileRadarFinalizationIsHeld() async throws {
+        let vault = try makeVault()
+        defer { try? FileManager.default.removeItem(at: vault.deletingLastPathComponent()) }
+        let gate = RadarSeedGate()
+        let store = GraphDataStore(radarTaskHook: { await gate.wait() })
+
+        let prepared = await store.prepare(
+            url: try writeGraph(graph(nodes: [node("a")], edges: []), vault: vault),
+            policy: .retry
+        )
+        guard case let .ready(handle) = prepared else {
+            return XCTFail("Expected a prepared graph")
+        }
+        await gate.waitUntilEntered()
+
+        let seedTask = Task { await store.radarSeed(for: handle) }
+        await Task.yield()
+        await gate.resume()
+        let seed = await seedTask.value
+        XCTAssertEqual(seed?.nodes.map(\.id), ["a"])
+    }
+
     func testIdenticalAndReorderedRefreshHaveNoDiff() async throws {
         let vault = try makeVault()
         defer { try? FileManager.default.removeItem(at: vault.deletingLastPathComponent()) }
@@ -154,6 +200,62 @@ final class GraphChangeRadarTests: XCTestCase {
         XCTAssertNil(Dictionary(uniqueKeysWithValues: prepared.seed.nodes.map { ($0.id, $0.sourcePath) })["traversal"]!)
         XCTAssertNil(Dictionary(uniqueKeysWithValues: prepared.seed.nodes.map { ($0.id, $0.sourcePath) })["absolute"]!)
         XCTAssertNil(Dictionary(uniqueKeysWithValues: prepared.seed.nodes.map { ($0.id, $0.sourcePath) })["escape"]!)
+    }
+
+    func testSourcePathResolutionMatchesParentAndFinalSymlinkSemantics() async throws {
+        let vault = try makeVault()
+        defer { try? FileManager.default.removeItem(at: vault.deletingLastPathComponent()) }
+        let safeDirectory = vault.appendingPathComponent("Safe", isDirectory: true)
+        let outsideDirectory = vault.deletingLastPathComponent().appendingPathComponent("outside", isDirectory: true)
+        try FileManager.default.createDirectory(at: safeDirectory, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: outsideDirectory, withIntermediateDirectories: true)
+        let plain = safeDirectory.appendingPathComponent("plain.md")
+        let second = safeDirectory.appendingPathComponent("second.md")
+        let outside = outsideDirectory.appendingPathComponent("outside.md")
+        try Data("plain".utf8).write(to: plain)
+        try Data("second".utf8).write(to: second)
+        try Data("outside".utf8).write(to: outside)
+        try FileManager.default.createSymbolicLink(
+            at: vault.appendingPathComponent("parent-inside", isDirectory: true),
+            withDestinationURL: safeDirectory
+        )
+        try FileManager.default.createSymbolicLink(
+            at: vault.appendingPathComponent("parent-outside", isDirectory: true),
+            withDestinationURL: outsideDirectory
+        )
+        try FileManager.default.createSymbolicLink(
+            at: vault.appendingPathComponent("final-inside.md"),
+            withDestinationURL: plain
+        )
+        try FileManager.default.createSymbolicLink(
+            at: vault.appendingPathComponent("final-outside.md"),
+            withDestinationURL: outside
+        )
+
+        let prepared = try await prepare(
+            graph(nodes: [
+                node("plain", source: "Safe/plain.md"),
+                node("duplicate-a", source: "Safe/plain.md"),
+                node("duplicate-b", source: "Safe/second.md"),
+                node("missing", source: "Safe/missing.md"),
+                node("parent-inside", source: "parent-inside/plain.md"),
+                node("parent-outside", source: "parent-outside/outside.md"),
+                node("final-inside", source: "final-inside.md"),
+                node("final-outside", source: "final-outside.md")
+            ], edges: []),
+            vault: vault,
+            store: GraphDataStore(),
+            policy: .retry
+        )
+        let paths = Dictionary(uniqueKeysWithValues: prepared.seed.nodes.map { ($0.id, $0.sourcePath) })
+        XCTAssertEqual(paths["plain"]!, "Safe/plain.md")
+        XCTAssertEqual(paths["duplicate-a"]!, "Safe/plain.md")
+        XCTAssertEqual(paths["duplicate-b"]!, "Safe/second.md")
+        XCTAssertEqual(paths["missing"]!, "Safe/missing.md")
+        XCTAssertEqual(paths["parent-inside"]!, "Safe/plain.md")
+        XCTAssertNil(paths["parent-outside"]!)
+        XCTAssertEqual(paths["final-inside"]!, "Safe/plain.md")
+        XCTAssertNil(paths["final-outside"]!)
     }
 
     func testPendingPathsResolveToNodesAndActivityLinksAreTouchedMetadata() async throws {
@@ -367,6 +469,13 @@ final class GraphChangeRadarTests: XCTestCase {
             throw NSError(domain: "GraphChangeRadarTests", code: 1)
         }
         return .init(handle: handle, seed: seed)
+    }
+
+    private func writeGraph(_ payload: [String: Any], vault: URL) throws -> URL {
+        let graphURL = vault.appendingPathComponent("graphify-out/graph.json")
+        try FileManager.default.createDirectory(at: graphURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try JSONSerialization.data(withJSONObject: payload, options: [.sortedKeys]).write(to: graphURL, options: .atomic)
+        return graphURL
     }
 
     private func makeVault() throws -> URL {

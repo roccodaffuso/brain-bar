@@ -28,8 +28,12 @@ assert.match(invalidCLI.stderr, /Usage:/);
 
 const names = [
   'graphTransportPreparationMs', 'appProcessResidentDeltaAfterTransportPreparationBytes', 'appProcessResidentMaxSampleBytes',
-  'threeDLoadToSettledPaintMs', 'threeDLayoutPreparationMs', 'threeDLayoutCallReturnMs', 'threeDLayoutZeroDelayTimerProbeMs',
+  'threeDLoadToSettledPaintMs', 'threeDNativePrepareToIndexMs', 'threeDNavigationToAPIReadyMs',
+  'threeDGraphFetchMs', 'threeDGraphJSONParseMs', 'threeDEvidenceBuildMs', 'threeDGraphPreparationMs', 'threeDApplyLensPreLayoutMs', 'threeDMetadataReplayMs',
+  'threeDNormalizeGraphMs', 'threeDPresentationIndexBuildMs', 'threeDLayoutCacheReadMs', 'threeDMeshHitGeometryMs', 'threeDFirstProjectionStaticPaintMs', 'threeDLayoutEndToEndMs',
+  'threeDLayoutPreparationMs', 'threeDProbeGraphFetchAndParseMs', 'threeDLayoutCallReturnMs', 'threeDLayoutZeroDelayTimerProbeMs',
   'threeDLensToSettledMs', 'threeDSearchToSettledMs',
+  'threeDPanOrbitFrameMs', 'threeDHoverToHighlightMs', 'threeDSelectionToFirstFeedbackMs', 'threeDSidebarOpenReframeMs', 'threeDOverviewCommunityTransitionMs',
   'twoDRuntimeLoadToDiagnosticsMs', 'twoDRuntimeLensToDiagnosticsMs', 'twoDRuntimeSearchToDiagnosticsMs'
 ];
 const summary = (samples) => ({ samples, p50: percentile(samples, 0.5), p95: percentile(samples, 0.95), cvPercent: coefficientOfVariation(samples) });

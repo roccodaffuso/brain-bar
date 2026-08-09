@@ -38,7 +38,7 @@ struct GraphWebView: NSViewRepresentable {
         context.coordinator.reviewQueueScript = Self.reviewQueueTargetsScript(status: reviewQueueStatus)
         context.coordinator.agentActivitySnapshot = agentActivitySnapshot
         context.coordinator.workflowSelectionID = workflowSelectionID
-        context.coordinator.pendingViewportCommand = viewportCommand
+        context.coordinator.receiveViewportCommand(viewportCommand)
         let graphMetadataPayload = Self.graphMetadataPayload(readAccessURL: readAccessURL)
         context.coordinator.graphMetadataVersion = graphMetadataPayload.version
         context.coordinator.graphMetadataScript = graphMetadataPayload.script
@@ -70,7 +70,7 @@ struct GraphWebView: NSViewRepresentable {
         if didUpdateWorkflowSelection {
             context.coordinator.workflowSelectionID = workflowSelectionID
         }
-        context.coordinator.pendingViewportCommand = viewportCommand
+        context.coordinator.receiveViewportCommand(viewportCommand)
         let didChangeSession = context.coordinator.sessionState != sessionState
         context.coordinator.sessionState = sessionState
 
@@ -89,7 +89,7 @@ struct GraphWebView: NSViewRepresentable {
         if didUpdateWorkflowSelection {
             context.coordinator.applyWorkflowSelection(in: webView)
         }
-        context.coordinator.applyViewportCommandIfNeeded(viewportCommand, in: webView)
+        context.coordinator.applyViewportCommandIfNeeded(context.coordinator.pendingViewportCommand, in: webView)
         if didChangeSession {
             context.coordinator.applySessionStateIfNeeded(sessionState, in: webView)
         }
@@ -293,8 +293,19 @@ struct GraphWebView: NSViewRepresentable {
             webView.evaluateJavaScript("if (window.brainBarApplyWorkflowHighlight2D) { window.brainBarApplyWorkflowHighlight2D(\(value)); }")
         }
 
+        func receiveViewportCommand(_ command: GraphViewportCommand?) {
+            guard let command else {
+                return
+            }
+            let lastReceivedID = max(lastViewportCommandID, pendingViewportCommand?.id ?? -1)
+            guard command.id > lastReceivedID else {
+                return
+            }
+            pendingViewportCommand = command
+        }
+
         func applyViewportCommandIfNeeded(_ command: GraphViewportCommand?, in webView: WKWebView) {
-            guard let command, lastViewportCommandID != command.id else {
+            guard let command, command.id > lastViewportCommandID else {
                 return
             }
             lastViewportCommandID = command.id
@@ -310,7 +321,9 @@ struct GraphWebView: NSViewRepresentable {
                 script = ""
             case .graphHealth:
                 script = "if (window.brainBarShowGraphHealth) { window.brainBarShowGraphHealth(); }"
-            case .revealNode3D, .pathFromNode3D, .showCommunity3D:
+            case .revealNode3D, .pathFromNode3D, .showCommunity3D,
+                    .setDetailLevel, .setSidebarState, .setCameraPreset,
+                    .cameraBack, .setReduceMotion:
                 script = ""
             }
             guard !script.isEmpty else {
@@ -388,10 +401,11 @@ struct GraphWebView: NSViewRepresentable {
                 guard let state = GraphWebView.decodeGraphSessionState(body) else {
                     return
                 }
-                sessionState = state
-                lastAppliedSessionState = state
+                let mergedState = state.preservingThreeDPresentation(from: sessionState)
+                sessionState = mergedState
+                lastAppliedSessionState = mergedState
                 Task { @MainActor in
-                    onSessionState(state)
+                    onSessionState(mergedState)
                 }
                 return
             }
@@ -753,7 +767,7 @@ extension GraphWebView {
 
     static func graphSessionJSON(_ state: GraphSessionState) -> String {
         guard
-            let data = try? JSONEncoder().encode(state),
+            let data = try? JSONEncoder().encode(state.normalized),
             let json = String(data: data, encoding: .utf8)
         else {
             return "{}"

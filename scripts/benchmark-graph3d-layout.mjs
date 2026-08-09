@@ -5,7 +5,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { dirname, join } from 'node:path';
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
-const { separateLocalNodesByGrid } = await import(pathToFileURL(join(
+const { computeDeterministicGraphLayout, separateLocalNodesByGrid } = await import(pathToFileURL(join(
   root,
   'BrainBar/Resources/Graph3D/graph3d-layout-utils.mjs'
 )));
@@ -13,6 +13,8 @@ const { separateLocalNodesByGrid } = await import(pathToFileURL(join(
 const MIN_DISTANCE = 13;
 const WARMUP_RUNS = 2;
 const MEASURED_RUNS = 9;
+const FULL_LAYOUT_WARMUP_RUNS = 1;
+const FULL_LAYOUT_MEASURED_RUNS = 5;
 const LEGACY_COMPARISON_GUARD = 2_500_000;
 const cases = [
   { label: '1k', nodes: 1_000, edges: 2_370, communities: 10, seed: 0x1a2b3c4d },
@@ -24,7 +26,7 @@ const cases = [
 console.log('Graph3D local-node separation benchmark');
 console.log(`Node ${process.version} · ${process.platform} ${process.arch} · ${os.cpus().length} logical CPUs · ${(os.totalmem() / 1024 ** 3).toFixed(1)} GiB RAM`);
 console.log(`Protocol: ${WARMUP_RUNS} warmups + ${MEASURED_RUNS} measured runs per implementation and case; fixed seeds. Legacy runs stop at the ${LEGACY_COMPARISON_GUARD.toLocaleString()} candidate-comparison guard and are reported as over-budget rather than estimated; spatial still completes all ${MEASURED_RUNS} measurements.`);
-console.log('Workload: each case models only the local-separation phase (edges are cardinality context, not inputs to this function). Nodes are distributed across the listed communities on a sparse 28-unit grid with deterministic near-pair injections, so the benchmark measures the former within-community all-pairs hotspot without inventing edge-force work.');
+console.log('Workload: local separation uses sparse 28-unit grids with deterministic near-pair injections. The community-island table below measures the complete Worker layout on deterministic graph fixtures using 1 warmup + 5 measured runs, separately so the 25k gate remains practical on developer hardware.');
 
 const rows = cases.map((definition) => benchmarkCase(definition));
 
@@ -33,6 +35,17 @@ console.log('| Case | Legacy p50 / p95 / CV | Spatial p50 / p95 / CV | p50 speed
 console.log('| --- | --- | --- | ---: | --- |');
 rows.forEach((row) => {
   console.log(`| ${row.label} (${row.nodes.toLocaleString()} nodes, ${row.edges.toLocaleString()} edges, ${row.communities} communities) | ${formatStats(row.legacy)} | ${formatStats(row.spatial)} | ${row.speedup ? `${row.speedup.toFixed(2)}x` : 'over-budget'} | ${row.correctness} |`);
+});
+
+const layoutRows = cases.filter(({ label }) => label !== '10k').map(benchmarkCommunityLayoutCase);
+console.log('');
+console.log('| Community-island layout | p50 / p95 / CV | M1 layout budget | Correctness |');
+console.log('| --- | --- | ---: | --- |');
+layoutRows.forEach((row) => {
+  console.log(`| ${row.label} (${row.nodes.toLocaleString()} nodes, ${row.edges.toLocaleString()} edges) | ${formatStats(row.stats)} | ${row.budget.toLocaleString()} ms | ${row.correct ? 'pass' : 'FAIL'} |`);
+  if (!row.correct || row.stats.p95 > row.budget) {
+    process.exitCode = 1;
+  }
 });
 
 function benchmarkCase(definition) {
@@ -46,6 +59,53 @@ function benchmarkCase(definition) {
     speedup: legacy.overBudget ? null : legacy.stats.p50 / spatial.stats.p50,
     correctness: spatial.correct ? (legacy.overBudget ? 'spatial pass; legacy over-budget' : (legacy.correct ? 'pass' : 'FAIL')) : 'FAIL'
   };
+}
+
+function benchmarkCommunityLayoutCase(definition) {
+  const graph = createGraphInput(definition);
+  for (let index = 0; index < FULL_LAYOUT_WARMUP_RUNS; index += 1) {
+    computeDeterministicGraphLayout(graph);
+  }
+  const durations = [];
+  let correct = true;
+  for (let index = 0; index < FULL_LAYOUT_MEASURED_RUNS; index += 1) {
+    const startedAt = performance.now();
+    const layout = computeDeterministicGraphLayout(graph);
+    durations.push(performance.now() - startedAt);
+    correct &&= layout.nodeIds.length === graph.nodes.length
+      && layout.positions.length === graph.nodes.length * 3
+      && layout.communityCount === definition.communities
+      && [...layout.positions].every(Number.isFinite);
+  }
+  return {
+    ...definition,
+    stats: summarize(durations),
+    budget: definition.label === '25k stress' ? 3_000 : 1_000,
+    correct
+  };
+}
+
+function createGraphInput({ nodes: nodeCount, edges: edgeCount, communities: communityCount, seed }) {
+  const random = createRandom(seed);
+  const nodes = Array.from({ length: nodeCount }, (_, index) => ({
+    id: `node-${index}`,
+    label: `Node ${index}`,
+    community: `community-${Math.floor(index * communityCount / nodeCount)}`
+  }));
+  const boundaries = Array.from({ length: communityCount }, (_, index) => ({
+    start: Math.floor(index * nodeCount / communityCount),
+    end: Math.floor((index + 1) * nodeCount / communityCount)
+  }));
+  const edges = Array.from({ length: edgeCount }, (_, index) => {
+    const sourceIndex = index % nodeCount;
+    const sourceCommunity = Math.floor(sourceIndex * communityCount / nodeCount);
+    const boundary = boundaries[sourceCommunity];
+    const targetIndex = index % 5 === 0
+      ? Math.floor(random() * nodeCount)
+      : boundary.start + ((sourceIndex - boundary.start + 1 + Math.floor(random() * Math.max(boundary.end - boundary.start - 1, 1))) % Math.max(boundary.end - boundary.start, 1));
+    return { source: nodes[sourceIndex].id, target: nodes[targetIndex === sourceIndex ? (targetIndex + 1) % nodeCount : targetIndex].id };
+  });
+  return { nodes, edges };
 }
 
 function measure(input, implementation, { maxComparisons } = {}) {

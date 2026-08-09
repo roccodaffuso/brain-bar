@@ -8,34 +8,26 @@ export function searchGraphNodes({ query = '', nodes = [], limit = 20 } = {}) {
     return [];
   }
 
-  return (nodes || [])
-    .map((node) => {
-      const id = String(node?.id ?? '');
-      const label = String(node?.label || node?.title || id || 'Untitled');
-      const sourceFile = sourceFileForNode(node);
-      const score = scoreSearchMatch({
-        query: parsedQuery.text,
-        id,
-        label,
-        sourceFile
-      });
-      return {
-        node,
-        id,
-        label,
-        sourceFile,
-        score: score ?? (parsedQuery.text ? null : 80),
-        matchesFilters: parsedQuery.filters.every((filter) => matchesGraphSearchFilter(node, filter))
-      };
-    })
-    .filter((item) => item.id && item.score !== null && item.matchesFilters)
-    .sort((left, right) => {
-      if (left.score !== right.score) {
-        return left.score - right.score;
-      }
-      return left.label.localeCompare(right.label) || left.id.localeCompare(right.id);
-    })
-    .slice(0, limit);
+  const maximum = Math.max(0, Math.floor(Number(limit) || 0));
+  if (!maximum) return [];
+  const matches = [];
+  for (const node of nodes || []) {
+    const id = String(node?.id ?? '');
+    const label = String(node?.label || node?.title || id || 'Untitled');
+    const sourceFile = sourceFileForNode(node);
+    const score = scoreSearchMatch({ query: parsedQuery.text, id, label, sourceFile });
+    if (!id || score === null && parsedQuery.text || !parsedQuery.filters.every((filter) => matchesGraphSearchFilter(node, filter))) continue;
+    const candidate = { node, id, label, sourceFile, score: score ?? 80, matchesFilters: true };
+    let insertion = matches.length;
+    while (insertion > 0 && compareSearchResults(candidate, matches[insertion - 1]) < 0) insertion -= 1;
+    if (insertion < maximum) matches.splice(insertion, 0, candidate);
+    if (matches.length > maximum) matches.pop();
+  }
+  return matches;
+}
+
+function compareSearchResults(left, right) {
+  return left.score - right.score || left.label.localeCompare(right.label) || left.id.localeCompare(right.id);
 }
 
 export function parseGraphSearchQuery(value) {

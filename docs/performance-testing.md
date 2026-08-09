@@ -76,9 +76,10 @@ The report contains only fixture counts/name, protocol counts, process/OS numeri
 
 - `graphTransportPreparationMs`: main-actor wall time to inspect the graph file version before starting the local 3D resource transport.
 - `appProcessResidentDeltaAfterTransportPreparationBytes` and `appProcessResidentMaxSampleBytes`: app test-process resident samples taken before transport preparation, after transport preparation, after 3D teardown, and after 2D teardown. The latter is the maximum of those discrete samples, not a process peak. Neither includes WebKit WebContent helper processes or represents whole-renderer memory.
-- `threeDLoadToSettledPaintMs`: 3D load start to the first completed, settled visual-canvas overlay paint. `threeDLayoutPreparationMs` is the renderer's own reported layout-preparation duration for that load.
+- `threeDLoadToSettledPaintMs`: 3D load start to the first completed, settled visual-canvas overlay paint. `threeDNativePrepareToIndexMs` measures native GraphDataStore preparation through digest-bound navigation availability; `threeDNavigationToAPIReadyMs` measures that navigation through renderer API readiness. The remaining 3D phases partition fetch/parse, graph preparation, layout and paint without exposing graph content.
 - `threeDLayoutCallReturnMs` and `threeDLayoutZeroDelayTimerProbeMs`: test-only, content-free WebKit responsiveness probes. A visible `WKWebView` opens the real `brainbar3d://` resource without its navigation delegate, fetches the real scheme-served `graph.json` in-page, schedules a zero-delay timer immediately before calling `brainBarLoadGraph`, and awaits `Promise.resolve(result)`. The first metric is the call-return delay; the second is the timer's observed delay. With synchronous layout they include the blocked event-loop interval; with an asynchronous Worker they measure the main-thread responsiveness of that handoff. They are not a whole-app interaction-latency budget.
 - `threeDLensToSettledMs` and `threeDSearchToSettledMs`: action dispatch to the corresponding settled 3D diagnostics state.
+- `threeDPanOrbitFrameMs`, `threeDHoverToHighlightMs`, `threeDSelectionToFirstFeedbackMs`, `threeDSidebarOpenReframeMs`, and `threeDOverviewCommunityTransitionMs`: query-gated, hosted-`WKWebView` production-renderer measurements. The first three bind the redesign candidate gates (pan/orbit p95 ≤33 ms; hover/selection feedback p95 ≤50 ms). Sidebar reframe and Overview-to-Community are reported as observed timing until an owner-approved limit exists. They contain only durations, never node, edge, label, path, search, or viewport content.
 - `twoDRuntimeLoadToDiagnosticsMs`, `twoDRuntimeLensToDiagnosticsMs`, and `twoDRuntimeSearchToDiagnosticsMs`: production BrainBar 2D runtime diagnostic latency with deterministic DataSet/network stubs. They are not a whole 2D Vis.js renderer graph-ready measurement. Both runtimes report queryable node/edge counts, which must exactly equal fixture counts in the same run.
 
 BrainBar does not vendor Vis.js. A full offline 2D Vis Network measurement is therefore intentionally excluded: Graphify's generated `graph.html` loads its pinned Vis Network dependency remotely. The stubbed 2D runtime metrics remain regression evidence for BrainBar's own logic only and must not be presented as offline-renderer performance.
@@ -88,3 +89,54 @@ The measurement XCTest hosts each test-only `WKWebView` in a small, visible, bor
 For deterministic teardown, the 3D harness aborts graph and Worker work, navigates to a blank document, waits for it to complete, then removes handlers and closes the window once; 2D uses the same blank-document lifecycle.
 
 Running the command directly in Terminal needs no BrainBar permission. Sandboxed agents or automation may need host permission to run `xcodebuild` and write its DerivedData.
+
+## Whole-renderer memory evidence
+
+Whole-renderer memory is measured separately from the app-process RSS samples
+above. The content-free evidence is
+`outputs/graph3d-whole-renderer-memory-evidence.json` (with a concise Markdown
+summary beside it). It was captured on the reference MacBook Air Mac15,12,
+Apple M3 (8 cores), 16 GB, macOS 26.5.2 (build 25F84), using a synchronized
+all-process Instruments Activity Monitor sample.
+
+The focused visible-`WKWebView` XCTest
+`testGraph3DOverviewFitKeepsReviewedSpatialFixturesVisibleInCompactViewport`
+passed in 3.110 s after sequential public-fixture loads of 1k,
+inspected-shape, and 25k-stress. In its 3.172-second capture window, the
+maximum sampled family physical footprint was 827,215,760 bytes (788.89 MiB)
+at 8.704 s. The family consists of content-free application/test, WebKit GPU,
+Networking, WebContent, and supporting-media-helper samples.
+
+This is explicitly a maximum sampled physical footprint, not a true peak,
+allocation or leak proof, or a whole-renderer budget pass. Numeric
+whole-renderer memory budget approval remains owner-pending.
+
+A separate 15-scenario/WebView measurement-harness capture reached
+3,196,977,184 bytes (3,048.88 MiB) with 14 concurrent WebContent processes.
+It is documented only as a harness-stress upper bound, not as BrainBar
+single-view product memory. The raw performance capture is deliberately not
+committed.
+
+## Graph3D redesign final observed reports
+
+The final public-fixture reports are committed as content-free artifacts:
+`outputs/graph3d-renderer-measurements-1k-final.json`,
+`outputs/graph3d-renderer-measurements-inspected-shape-final.json`, and
+`outputs/graph3d-renderer-measurements-25k-stress-final.json`. All retain
+exact queryable parity. The corresponding presentation acceptance report is
+`outputs/graph3d-presentation-acceptance-after.json`.
+
+The redesign's binding hosted interaction evidence comes from 25k: pan/orbit
+p95 is 3 ms (limit 33 ms); hover and selection first feedback p95 are 11 ms
+and 13 ms respectively (combined gate limit 50 ms). Sidebar open reframe p95
+is 13 ms and Overview-to-Community first-rendered feedback p95 is 58.2 ms.
+Those latter two values do not claim that a complete camera animation finished
+within that interval and remain observational until a reviewed product limit is
+adopted.
+
+For public visual QA, run `node scripts/run-graph3d-visual-capture.mjs`. It
+creates reviewed synthetic fixture data under a single-use `/private/tmp`
+request, runs only `testOptInGraph3DVisualCapture`, validates request version,
+PID, TTL, and path containment, then copies validated screenshots and a
+content-free manifest to `outputs/graph3d-visual-acceptance/`. Ordinary XCTest
+runs have no request marker and do not emit capture files.

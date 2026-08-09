@@ -208,7 +208,7 @@ struct GraphShellView: View {
                         )
                     },
                     onOpenNode: model.openGraphNode,
-                    onSessionState: model.updateGraphSessionState
+                    onSessionState: model.updateGraphSessionStateFromRenderer
                 )
             } else {
                 ZStack(alignment: .topLeading) {
@@ -236,7 +236,7 @@ struct GraphShellView: View {
                         )
                     },
                     onOpenNode: model.openGraphNode,
-                    onSessionState: model.updateGraphSessionState
+                    onSessionState: model.updateGraphSessionStateFromRenderer
                     )
 
                     if mode.isFocus, model.graphViewMode == .threeD {

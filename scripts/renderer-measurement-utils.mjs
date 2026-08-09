@@ -5,20 +5,41 @@ export const reviewedFixtures = Object.freeze({
   '25k-stress': Object.freeze({ nodeCount: 25000, edgeCount: 59512 })
 });
 
-const metricNames = new Set([
+export const measurementMetricNames = Object.freeze([
   'graphTransportPreparationMs',
   'appProcessResidentDeltaAfterTransportPreparationBytes',
   'appProcessResidentMaxSampleBytes',
   'threeDLoadToSettledPaintMs',
+  'threeDNativePrepareToIndexMs',
+  'threeDNavigationToAPIReadyMs',
+  'threeDGraphFetchMs',
+  'threeDGraphJSONParseMs',
+  'threeDEvidenceBuildMs',
+  'threeDGraphPreparationMs',
+  'threeDApplyLensPreLayoutMs',
+  'threeDMetadataReplayMs',
+  'threeDNormalizeGraphMs',
+  'threeDPresentationIndexBuildMs',
+  'threeDLayoutCacheReadMs',
+  'threeDMeshHitGeometryMs',
+  'threeDFirstProjectionStaticPaintMs',
+  'threeDLayoutEndToEndMs',
   'threeDLayoutPreparationMs',
+  'threeDProbeGraphFetchAndParseMs',
   'threeDLayoutCallReturnMs',
   'threeDLayoutZeroDelayTimerProbeMs',
   'threeDLensToSettledMs',
   'threeDSearchToSettledMs',
+  'threeDPanOrbitFrameMs',
+  'threeDHoverToHighlightMs',
+  'threeDSelectionToFirstFeedbackMs',
+  'threeDSidebarOpenReframeMs',
+  'threeDOverviewCommunityTransitionMs',
   'twoDRuntimeLoadToDiagnosticsMs',
   'twoDRuntimeLensToDiagnosticsMs',
   'twoDRuntimeSearchToDiagnosticsMs'
 ]);
+const metricNames = new Set(measurementMetricNames);
 
 export function isReviewedFixtureName(name) {
   return typeof name === 'string' && Object.hasOwn(reviewedFixtures, name);

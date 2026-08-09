@@ -91,18 +91,219 @@ struct GraphCameraState: Codable, Equatable, Sendable {
     }
 }
 
-struct GraphSessionState: Codable, Equatable, Sendable {
-    static let currentSchemaVersion = 1
+enum GraphDetailLevel: String, CaseIterable, Codable, Sendable {
+    case overview
+    case balanced
+    case full
+}
 
-    var schemaVersion: Int = currentSchemaVersion
+enum GraphDetailReason: String, CaseIterable, Codable, Sendable {
+    case user
+    case adaptiveDefault = "adaptive-default"
+    case focusOverride = "focus-override"
+    case performanceDegrade = "performance-degrade"
+}
+
+enum GraphSidebarState: String, CaseIterable, Codable, Sendable {
+    case collapsed
+    case overlay
+    case docked
+}
+
+enum GraphCameraPreset: String, CaseIterable, Codable, Sendable {
+    case overview
+    case community
+    case nodeFocus = "node-focus"
+    case activePath = "active-path"
+    case recentOrbit = "recent-orbit"
+    case manual
+}
+
+struct GraphCameraHistoryEntry: Codable, Equatable, Sendable {
+    var preset: GraphCameraPreset
+    var selectedNodeID: String?
+    var communityID: String?
+    var path: GraphPathContext?
+    var cameraState: GraphCameraState?
+
+    var normalized: GraphCameraHistoryEntry {
+        var entry = self
+        entry.selectedNodeID = Self.compactIdentifier(entry.selectedNodeID)
+        entry.communityID = Self.compactIdentifier(entry.communityID)
+        if let path = entry.path, let source = Self.compactIdentifier(path.sourceNodeID) {
+            let variant = Self.compactVariant(path.variant)
+            entry.path = GraphPathContext(
+                sourceNodeID: source,
+                targetNodeID: Self.compactIdentifier(path.targetNodeID),
+                variant: variant
+            )
+        } else {
+            entry.path = nil
+        }
+        entry.cameraState = entry.cameraState?.normalized.map { state in
+            var compacted = state
+            compacted.preset = Self.compactVariant(state.preset)
+            return compacted
+        }
+        return entry
+    }
+
+    private static func compactIdentifier(_ value: String?) -> String? {
+        guard let value = value?.nilIfEmpty else {
+            return nil
+        }
+        return String(value.prefix(GraphSessionState.maximumCameraHistoryIdentifierLength))
+    }
+
+    private static func compactVariant(_ value: String) -> String {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        let fallback = trimmed.isEmpty ? "shortest" : trimmed
+        return String(fallback.prefix(GraphSessionState.maximumCameraHistoryVariantLength))
+    }
+}
+
+struct GraphSessionState: Codable, Equatable, Sendable {
+    static let currentSchemaVersion = 2
+    static let maximumCameraHistoryEntries = 8
+    static let maximumCameraHistoryIdentifierLength = 160
+    static let maximumCameraHistoryVariantLength = 64
+    static let maximumCameraHistorySerializedBytes = 4_096
+    static let defaultDockedSidebarWidth = 360.0
+    static let minimumDockedSidebarWidth = 300.0
+
+    var schemaVersion: Int
     var graphVersion: String?
     var selectedNodeID: String?
-    var sourceLens: GraphSourceLens = .all
+    var sourceLens: GraphSourceLens
     var focusDepth: Int?
     var path: GraphPathContext?
     var communityID: String?
-    var searchQuery: String = ""
+    var searchQuery: String
     var cameraState: GraphCameraState?
+    var detailLevel: GraphDetailLevel
+    var detailReason: GraphDetailReason
+    var sidebarState: GraphSidebarState
+    /// Stored in points. The renderer additionally clamps this to 44% of its live viewport.
+    var sidebarWidth: Double?
+    var cameraPreset: GraphCameraPreset
+    var cameraHistory: [GraphCameraHistoryEntry]
+    var reduceMotion: Bool
+
+    /// Identifies a v2 bridge payload. It is intentionally not persisted.
+    private(set) var includesThreeDPresentationState: Bool
+
+    init(
+        schemaVersion: Int = currentSchemaVersion,
+        graphVersion: String? = nil,
+        selectedNodeID: String? = nil,
+        sourceLens: GraphSourceLens = .all,
+        focusDepth: Int? = nil,
+        path: GraphPathContext? = nil,
+        communityID: String? = nil,
+        searchQuery: String = "",
+        cameraState: GraphCameraState? = nil,
+        detailLevel: GraphDetailLevel = .overview,
+        detailReason: GraphDetailReason = .adaptiveDefault,
+        sidebarState: GraphSidebarState = .collapsed,
+        sidebarWidth: Double? = nil,
+        cameraPreset: GraphCameraPreset = .manual,
+        cameraHistory: [GraphCameraHistoryEntry] = [],
+        reduceMotion: Bool = false
+    ) {
+        self.schemaVersion = schemaVersion
+        self.graphVersion = graphVersion
+        self.selectedNodeID = selectedNodeID
+        self.sourceLens = sourceLens
+        self.focusDepth = focusDepth
+        self.path = path
+        self.communityID = communityID
+        self.searchQuery = searchQuery
+        self.cameraState = cameraState
+        self.detailLevel = detailLevel
+        self.detailReason = detailReason
+        self.sidebarState = sidebarState
+        self.sidebarWidth = sidebarWidth
+        self.cameraPreset = cameraPreset
+        self.cameraHistory = cameraHistory
+        self.reduceMotion = reduceMotion
+        self.includesThreeDPresentationState = true
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case schemaVersion
+        case graphVersion
+        case selectedNodeID
+        case sourceLens
+        case focusDepth
+        case path
+        case communityID
+        case searchQuery
+        case cameraState
+        case detailLevel
+        case detailReason
+        case sidebarState
+        case sidebarWidth
+        case cameraPreset
+        case cameraHistory
+        case reduceMotion
+    }
+
+    init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        let version = try values.decodeIfPresent(Int.self, forKey: .schemaVersion) ?? 1
+        guard version <= Self.currentSchemaVersion else {
+            throw DecodingError.dataCorruptedError(
+                forKey: .schemaVersion,
+                in: values,
+                debugDescription: "Unsupported graph session schema version."
+            )
+        }
+
+        schemaVersion = Self.currentSchemaVersion
+        graphVersion = try values.decodeIfPresent(String.self, forKey: .graphVersion)
+        selectedNodeID = try values.decodeIfPresent(String.self, forKey: .selectedNodeID)
+        sourceLens = try values.decodeIfPresent(GraphSourceLens.self, forKey: .sourceLens) ?? .all
+        focusDepth = try values.decodeIfPresent(Int.self, forKey: .focusDepth)
+        path = try values.decodeIfPresent(GraphPathContext.self, forKey: .path)
+        communityID = try values.decodeIfPresent(String.self, forKey: .communityID)
+        searchQuery = try values.decodeIfPresent(String.self, forKey: .searchQuery) ?? ""
+        cameraState = try values.decodeIfPresent(GraphCameraState.self, forKey: .cameraState)
+        detailLevel = try values.decodeIfPresent(GraphDetailLevel.self, forKey: .detailLevel) ?? .overview
+        detailReason = try values.decodeIfPresent(GraphDetailReason.self, forKey: .detailReason) ?? .adaptiveDefault
+        sidebarState = try values.decodeIfPresent(GraphSidebarState.self, forKey: .sidebarState) ?? .collapsed
+        sidebarWidth = try values.decodeIfPresent(Double.self, forKey: .sidebarWidth)
+        cameraPreset = try values.decodeIfPresent(GraphCameraPreset.self, forKey: .cameraPreset) ?? .manual
+        cameraHistory = try values.decodeIfPresent([GraphCameraHistoryEntry].self, forKey: .cameraHistory) ?? []
+        reduceMotion = try values.decodeIfPresent(Bool.self, forKey: .reduceMotion) ?? false
+        includesThreeDPresentationState = version >= 2
+            || values.contains(.detailLevel)
+            || values.contains(.detailReason)
+            || values.contains(.sidebarState)
+            || values.contains(.sidebarWidth)
+            || values.contains(.cameraPreset)
+            || values.contains(.cameraHistory)
+            || values.contains(.reduceMotion)
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var values = encoder.container(keyedBy: CodingKeys.self)
+        try values.encode(Self.currentSchemaVersion, forKey: .schemaVersion)
+        try values.encodeIfPresent(graphVersion, forKey: .graphVersion)
+        try values.encodeIfPresent(selectedNodeID, forKey: .selectedNodeID)
+        try values.encode(sourceLens, forKey: .sourceLens)
+        try values.encodeIfPresent(focusDepth, forKey: .focusDepth)
+        try values.encodeIfPresent(path, forKey: .path)
+        try values.encodeIfPresent(communityID, forKey: .communityID)
+        try values.encode(searchQuery, forKey: .searchQuery)
+        try values.encodeIfPresent(cameraState, forKey: .cameraState)
+        try values.encode(detailLevel, forKey: .detailLevel)
+        try values.encode(detailReason, forKey: .detailReason)
+        try values.encode(sidebarState, forKey: .sidebarState)
+        try values.encodeIfPresent(sidebarWidth, forKey: .sidebarWidth)
+        try values.encode(cameraPreset, forKey: .cameraPreset)
+        try values.encode(cameraHistory, forKey: .cameraHistory)
+        try values.encode(reduceMotion, forKey: .reduceMotion)
+    }
 
     var normalized: GraphSessionState {
         var state = self
@@ -123,7 +324,51 @@ struct GraphSessionState: Codable, Equatable, Sendable {
         }
         state.communityID = state.communityID?.nilIfEmpty
         state.cameraState = state.cameraState?.normalized
+        if state.sidebarState == .docked {
+            let width = state.sidebarWidth?.isFinite == true ? state.sidebarWidth! : Self.defaultDockedSidebarWidth
+            state.sidebarWidth = max(width, Self.minimumDockedSidebarWidth)
+        } else {
+            state.sidebarWidth = nil
+        }
+        state.cameraHistory = Self.compactCameraHistory(state.cameraHistory)
+        state.schemaVersion = Self.currentSchemaVersion
         return state
+    }
+
+    private static func compactCameraHistory(_ history: [GraphCameraHistoryEntry]) -> [GraphCameraHistoryEntry] {
+        let candidates = Array(history.map(\.normalized).suffix(maximumCameraHistoryEntries))
+        var retained: [GraphCameraHistoryEntry] = []
+        for entry in candidates.reversed() {
+            let proposal = [entry] + retained
+            guard historyFitsSerializedBudget(proposal) else {
+                continue
+            }
+            retained = proposal
+        }
+        return retained
+    }
+
+    private static func historyFitsSerializedBudget(_ history: [GraphCameraHistoryEntry]) -> Bool {
+        guard let data = try? JSONEncoder().encode(history) else {
+            return false
+        }
+        return data.count <= maximumCameraHistorySerializedBytes
+    }
+
+    func preservingThreeDPresentation(from previous: GraphSessionState) -> GraphSessionState {
+        guard !includesThreeDPresentationState else {
+            return normalized
+        }
+        var state = self
+        state.detailLevel = previous.detailLevel
+        state.detailReason = previous.detailReason
+        state.sidebarState = previous.sidebarState
+        state.sidebarWidth = previous.sidebarWidth
+        state.cameraPreset = previous.cameraPreset
+        state.cameraHistory = previous.cameraHistory
+        state.reduceMotion = previous.reduceMotion
+        state.includesThreeDPresentationState = true
+        return state.normalized
     }
 }
 
@@ -186,6 +431,11 @@ enum GraphViewportCommandKind: String, Sendable {
     case revealNode3D
     case pathFromNode3D
     case showCommunity3D
+    case setDetailLevel
+    case setSidebarState
+    case setCameraPreset
+    case cameraBack
+    case setReduceMotion
 }
 
 struct GraphViewportCommand: Equatable, Sendable {
@@ -508,6 +758,17 @@ final class AppModel {
         graphSourceLens = normalized.sourceLens
     }
 
+    func updateGraphSessionStateFromRenderer(_ nextState: GraphSessionState) {
+        guard nextState.schemaVersion == GraphSessionState.currentSchemaVersion else {
+            return
+        }
+        let normalized = nextState
+            .preservingThreeDPresentation(from: graphSessionState)
+            .normalized
+        graphSessionState = normalized
+        graphSourceLens = normalized.sourceLens
+    }
+
     func loadSavedGraphViews() async {
         do {
             savedGraphViews = try await savedGraphViewStore.load()
@@ -556,6 +817,7 @@ final class AppModel {
 
     func resetGraph3DCamera() {
         graph3DResetToken += 1
+        graphSessionState.cameraPreset = .overview
         sendGraphViewportCommand(.topView)
     }
 
@@ -573,6 +835,33 @@ final class AppModel {
 
     func zoomGraphOut() {
         sendGraphViewportCommand(.zoomOut)
+    }
+
+    func setGraphDetailLevel(_ level: GraphDetailLevel, reason: GraphDetailReason = .user) {
+        graphSessionState.detailLevel = level
+        graphSessionState.detailReason = reason
+        sendGraphViewportCommand(.setDetailLevel, payload: level.rawValue)
+    }
+
+    func setGraphSidebarState(_ state: GraphSidebarState, width: Double? = nil) {
+        graphSessionState.sidebarState = state
+        graphSessionState.sidebarWidth = width
+        graphSessionState = graphSessionState.normalized
+        sendGraphViewportCommand(.setSidebarState, payload: state.rawValue)
+    }
+
+    func setGraphCameraPreset(_ preset: GraphCameraPreset) {
+        graphSessionState.cameraPreset = preset
+        sendGraphViewportCommand(.setCameraPreset, payload: preset.rawValue)
+    }
+
+    func navigateGraphCameraBack() {
+        sendGraphViewportCommand(.cameraBack)
+    }
+
+    func setGraphReduceMotion(_ enabled: Bool) {
+        graphSessionState.reduceMotion = enabled
+        sendGraphViewportCommand(.setReduceMotion, payload: enabled ? "true" : "false")
     }
 
     func showGraphHealth() {

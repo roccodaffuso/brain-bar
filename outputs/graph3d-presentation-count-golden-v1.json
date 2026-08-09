@@ -1,0 +1,540 @@
+{
+  "schemaVersion": 1,
+  "kind": "graph3d-presentation-count-golden",
+  "sourceCapture": "after",
+  "fixtures": [
+    {
+      "name": "1k",
+      "nodeCount": 1000,
+      "edgeCount": 2380,
+      "scenarios": [
+        {
+          "scenario": "overview-collapsed",
+          "sidebarState": "collapsed",
+          "cameraPreset": "Overview",
+          "detailLevel": "overview",
+          "detailReason": "user",
+          "reduceMotion": false,
+          "queryableNodeCount": 1000,
+          "queryableEdgeCount": 2380,
+          "paintedNodeCount": 1000,
+          "paintedEdgeCount": 1800,
+          "communityAnchorCount": 10,
+          "persistentLabelCount": 8,
+          "activePromotionNodeCount": 0,
+          "overviewPaintBudget": {
+            "status": "not-applicable",
+            "budget": 1200,
+            "allowance": 0
+          }
+        },
+        {
+          "scenario": "overview-docked",
+          "sidebarState": "docked",
+          "cameraPreset": "Overview",
+          "detailLevel": "overview",
+          "detailReason": "user",
+          "reduceMotion": false,
+          "queryableNodeCount": 1000,
+          "queryableEdgeCount": 2380,
+          "paintedNodeCount": 1000,
+          "paintedEdgeCount": 1800,
+          "communityAnchorCount": 10,
+          "persistentLabelCount": 8,
+          "activePromotionNodeCount": 0,
+          "overviewPaintBudget": {
+            "status": "not-applicable",
+            "budget": 1200,
+            "allowance": 0
+          }
+        },
+        {
+          "scenario": "community",
+          "sidebarState": "collapsed",
+          "cameraPreset": "Community",
+          "detailLevel": "overview",
+          "detailReason": "user",
+          "reduceMotion": false,
+          "queryableNodeCount": 1000,
+          "queryableEdgeCount": 2380,
+          "paintedNodeCount": 1000,
+          "paintedEdgeCount": 1800,
+          "communityAnchorCount": 10,
+          "persistentLabelCount": 14,
+          "activePromotionNodeCount": 1,
+          "overviewPaintBudget": {
+            "status": "not-applicable",
+            "budget": 1200,
+            "allowance": 1
+          }
+        },
+        {
+          "scenario": "node-focus",
+          "sidebarState": "collapsed",
+          "cameraPreset": "Node Focus",
+          "detailLevel": "overview",
+          "detailReason": "user",
+          "reduceMotion": false,
+          "queryableNodeCount": 1000,
+          "queryableEdgeCount": 2380,
+          "paintedNodeCount": 1000,
+          "paintedEdgeCount": 1800,
+          "communityAnchorCount": 10,
+          "persistentLabelCount": 14,
+          "activePromotionNodeCount": 1,
+          "overviewPaintBudget": {
+            "status": "not-applicable",
+            "budget": 1200,
+            "allowance": 1
+          }
+        },
+        {
+          "scenario": "path",
+          "sidebarState": "collapsed",
+          "cameraPreset": "Active Path",
+          "detailLevel": "overview",
+          "detailReason": "user",
+          "reduceMotion": false,
+          "queryableNodeCount": 1000,
+          "queryableEdgeCount": 2380,
+          "paintedNodeCount": 1000,
+          "paintedEdgeCount": 1800,
+          "communityAnchorCount": 10,
+          "persistentLabelCount": 14,
+          "activePromotionNodeCount": 5,
+          "overviewPaintBudget": {
+            "status": "not-applicable",
+            "budget": 1200,
+            "allowance": 5
+          }
+        },
+        {
+          "scenario": "recent",
+          "sidebarState": "collapsed",
+          "cameraPreset": "Recent Orbit",
+          "detailLevel": "overview",
+          "detailReason": "user",
+          "reduceMotion": false,
+          "queryableNodeCount": 1000,
+          "queryableEdgeCount": 2380,
+          "paintedNodeCount": 1000,
+          "paintedEdgeCount": 1800,
+          "communityAnchorCount": 10,
+          "persistentLabelCount": 14,
+          "activePromotionNodeCount": 7,
+          "overviewPaintBudget": {
+            "status": "not-applicable",
+            "budget": 1200,
+            "allowance": 7
+          }
+        },
+        {
+          "scenario": "narrow-overlay",
+          "sidebarState": "overlay",
+          "cameraPreset": "Overview",
+          "detailLevel": "overview",
+          "detailReason": "user",
+          "reduceMotion": false,
+          "queryableNodeCount": 1000,
+          "queryableEdgeCount": 2380,
+          "paintedNodeCount": 1000,
+          "paintedEdgeCount": 1800,
+          "communityAnchorCount": 10,
+          "persistentLabelCount": 8,
+          "activePromotionNodeCount": 0,
+          "overviewPaintBudget": {
+            "status": "not-applicable",
+            "budget": 1200,
+            "allowance": 0
+          }
+        },
+        {
+          "scenario": "reduce-motion",
+          "sidebarState": "collapsed",
+          "cameraPreset": "Overview",
+          "detailLevel": "overview",
+          "detailReason": "user",
+          "reduceMotion": true,
+          "queryableNodeCount": 1000,
+          "queryableEdgeCount": 2380,
+          "paintedNodeCount": 1000,
+          "paintedEdgeCount": 1800,
+          "communityAnchorCount": 10,
+          "persistentLabelCount": 8,
+          "activePromotionNodeCount": 0,
+          "overviewPaintBudget": {
+            "status": "not-applicable",
+            "budget": 1200,
+            "allowance": 0
+          }
+        }
+      ]
+    },
+    {
+      "name": "inspected-shape",
+      "nodeCount": 12547,
+      "edgeCount": 29868,
+      "scenarios": [
+        {
+          "scenario": "overview-collapsed",
+          "sidebarState": "collapsed",
+          "cameraPreset": "Overview",
+          "detailLevel": "overview",
+          "detailReason": "user",
+          "reduceMotion": false,
+          "queryableNodeCount": 12547,
+          "queryableEdgeCount": 29868,
+          "paintedNodeCount": 1200,
+          "paintedEdgeCount": 1800,
+          "communityAnchorCount": 64,
+          "persistentLabelCount": 8,
+          "activePromotionNodeCount": 0,
+          "overviewPaintBudget": {
+            "status": "pass",
+            "budget": 1200,
+            "allowance": 0,
+            "limit": 1200,
+            "observed": 1200
+          }
+        },
+        {
+          "scenario": "overview-docked",
+          "sidebarState": "docked",
+          "cameraPreset": "Overview",
+          "detailLevel": "overview",
+          "detailReason": "user",
+          "reduceMotion": false,
+          "queryableNodeCount": 12547,
+          "queryableEdgeCount": 29868,
+          "paintedNodeCount": 1200,
+          "paintedEdgeCount": 1800,
+          "communityAnchorCount": 64,
+          "persistentLabelCount": 8,
+          "activePromotionNodeCount": 0,
+          "overviewPaintBudget": {
+            "status": "pass",
+            "budget": 1200,
+            "allowance": 0,
+            "limit": 1200,
+            "observed": 1200
+          }
+        },
+        {
+          "scenario": "community",
+          "sidebarState": "collapsed",
+          "cameraPreset": "Community",
+          "detailLevel": "overview",
+          "detailReason": "user",
+          "reduceMotion": false,
+          "queryableNodeCount": 12547,
+          "queryableEdgeCount": 29868,
+          "paintedNodeCount": 1201,
+          "paintedEdgeCount": 1800,
+          "communityAnchorCount": 64,
+          "persistentLabelCount": 14,
+          "activePromotionNodeCount": 1,
+          "overviewPaintBudget": {
+            "status": "pass",
+            "budget": 1200,
+            "allowance": 1,
+            "limit": 1201,
+            "observed": 1201
+          }
+        },
+        {
+          "scenario": "node-focus",
+          "sidebarState": "collapsed",
+          "cameraPreset": "Node Focus",
+          "detailLevel": "overview",
+          "detailReason": "user",
+          "reduceMotion": false,
+          "queryableNodeCount": 12547,
+          "queryableEdgeCount": 29868,
+          "paintedNodeCount": 1201,
+          "paintedEdgeCount": 1800,
+          "communityAnchorCount": 64,
+          "persistentLabelCount": 14,
+          "activePromotionNodeCount": 1,
+          "overviewPaintBudget": {
+            "status": "pass",
+            "budget": 1200,
+            "allowance": 1,
+            "limit": 1201,
+            "observed": 1201
+          }
+        },
+        {
+          "scenario": "path",
+          "sidebarState": "collapsed",
+          "cameraPreset": "Active Path",
+          "detailLevel": "overview",
+          "detailReason": "user",
+          "reduceMotion": false,
+          "queryableNodeCount": 12547,
+          "queryableEdgeCount": 29868,
+          "paintedNodeCount": 1205,
+          "paintedEdgeCount": 1800,
+          "communityAnchorCount": 64,
+          "persistentLabelCount": 14,
+          "activePromotionNodeCount": 5,
+          "overviewPaintBudget": {
+            "status": "pass",
+            "budget": 1200,
+            "allowance": 5,
+            "limit": 1205,
+            "observed": 1205
+          }
+        },
+        {
+          "scenario": "recent",
+          "sidebarState": "collapsed",
+          "cameraPreset": "Recent Orbit",
+          "detailLevel": "overview",
+          "detailReason": "user",
+          "reduceMotion": false,
+          "queryableNodeCount": 12547,
+          "queryableEdgeCount": 29868,
+          "paintedNodeCount": 1201,
+          "paintedEdgeCount": 1800,
+          "communityAnchorCount": 64,
+          "persistentLabelCount": 14,
+          "activePromotionNodeCount": 7,
+          "overviewPaintBudget": {
+            "status": "pass",
+            "budget": 1200,
+            "allowance": 7,
+            "limit": 1207,
+            "observed": 1201
+          }
+        },
+        {
+          "scenario": "narrow-overlay",
+          "sidebarState": "overlay",
+          "cameraPreset": "Overview",
+          "detailLevel": "overview",
+          "detailReason": "user",
+          "reduceMotion": false,
+          "queryableNodeCount": 12547,
+          "queryableEdgeCount": 29868,
+          "paintedNodeCount": 1200,
+          "paintedEdgeCount": 1800,
+          "communityAnchorCount": 64,
+          "persistentLabelCount": 8,
+          "activePromotionNodeCount": 0,
+          "overviewPaintBudget": {
+            "status": "pass",
+            "budget": 1200,
+            "allowance": 0,
+            "limit": 1200,
+            "observed": 1200
+          }
+        },
+        {
+          "scenario": "reduce-motion",
+          "sidebarState": "collapsed",
+          "cameraPreset": "Overview",
+          "detailLevel": "overview",
+          "detailReason": "user",
+          "reduceMotion": true,
+          "queryableNodeCount": 12547,
+          "queryableEdgeCount": 29868,
+          "paintedNodeCount": 1200,
+          "paintedEdgeCount": 1800,
+          "communityAnchorCount": 64,
+          "persistentLabelCount": 8,
+          "activePromotionNodeCount": 0,
+          "overviewPaintBudget": {
+            "status": "pass",
+            "budget": 1200,
+            "allowance": 0,
+            "limit": 1200,
+            "observed": 1200
+          }
+        }
+      ]
+    },
+    {
+      "name": "25k-stress",
+      "nodeCount": 25000,
+      "edgeCount": 59512,
+      "scenarios": [
+        {
+          "scenario": "overview-collapsed",
+          "sidebarState": "collapsed",
+          "cameraPreset": "Overview",
+          "detailLevel": "overview",
+          "detailReason": "user",
+          "reduceMotion": false,
+          "queryableNodeCount": 25000,
+          "queryableEdgeCount": 59512,
+          "paintedNodeCount": 1200,
+          "paintedEdgeCount": 1800,
+          "communityAnchorCount": 100,
+          "persistentLabelCount": 8,
+          "activePromotionNodeCount": 0,
+          "overviewPaintBudget": {
+            "status": "pass",
+            "budget": 1200,
+            "allowance": 0,
+            "limit": 1200,
+            "observed": 1200
+          }
+        },
+        {
+          "scenario": "overview-docked",
+          "sidebarState": "docked",
+          "cameraPreset": "Overview",
+          "detailLevel": "overview",
+          "detailReason": "user",
+          "reduceMotion": false,
+          "queryableNodeCount": 25000,
+          "queryableEdgeCount": 59512,
+          "paintedNodeCount": 1200,
+          "paintedEdgeCount": 1800,
+          "communityAnchorCount": 100,
+          "persistentLabelCount": 8,
+          "activePromotionNodeCount": 0,
+          "overviewPaintBudget": {
+            "status": "pass",
+            "budget": 1200,
+            "allowance": 0,
+            "limit": 1200,
+            "observed": 1200
+          }
+        },
+        {
+          "scenario": "community",
+          "sidebarState": "collapsed",
+          "cameraPreset": "Community",
+          "detailLevel": "overview",
+          "detailReason": "user",
+          "reduceMotion": false,
+          "queryableNodeCount": 25000,
+          "queryableEdgeCount": 59512,
+          "paintedNodeCount": 1201,
+          "paintedEdgeCount": 1800,
+          "communityAnchorCount": 100,
+          "persistentLabelCount": 14,
+          "activePromotionNodeCount": 1,
+          "overviewPaintBudget": {
+            "status": "pass",
+            "budget": 1200,
+            "allowance": 1,
+            "limit": 1201,
+            "observed": 1201
+          }
+        },
+        {
+          "scenario": "node-focus",
+          "sidebarState": "collapsed",
+          "cameraPreset": "Node Focus",
+          "detailLevel": "overview",
+          "detailReason": "user",
+          "reduceMotion": false,
+          "queryableNodeCount": 25000,
+          "queryableEdgeCount": 59512,
+          "paintedNodeCount": 1201,
+          "paintedEdgeCount": 1800,
+          "communityAnchorCount": 100,
+          "persistentLabelCount": 14,
+          "activePromotionNodeCount": 1,
+          "overviewPaintBudget": {
+            "status": "pass",
+            "budget": 1200,
+            "allowance": 1,
+            "limit": 1201,
+            "observed": 1201
+          }
+        },
+        {
+          "scenario": "path",
+          "sidebarState": "collapsed",
+          "cameraPreset": "Active Path",
+          "detailLevel": "overview",
+          "detailReason": "user",
+          "reduceMotion": false,
+          "queryableNodeCount": 25000,
+          "queryableEdgeCount": 59512,
+          "paintedNodeCount": 1205,
+          "paintedEdgeCount": 1800,
+          "communityAnchorCount": 100,
+          "persistentLabelCount": 14,
+          "activePromotionNodeCount": 5,
+          "overviewPaintBudget": {
+            "status": "pass",
+            "budget": 1200,
+            "allowance": 5,
+            "limit": 1205,
+            "observed": 1205
+          }
+        },
+        {
+          "scenario": "recent",
+          "sidebarState": "collapsed",
+          "cameraPreset": "Recent Orbit",
+          "detailLevel": "overview",
+          "detailReason": "user",
+          "reduceMotion": false,
+          "queryableNodeCount": 25000,
+          "queryableEdgeCount": 59512,
+          "paintedNodeCount": 1201,
+          "paintedEdgeCount": 1800,
+          "communityAnchorCount": 100,
+          "persistentLabelCount": 14,
+          "activePromotionNodeCount": 7,
+          "overviewPaintBudget": {
+            "status": "pass",
+            "budget": 1200,
+            "allowance": 7,
+            "limit": 1207,
+            "observed": 1201
+          }
+        },
+        {
+          "scenario": "narrow-overlay",
+          "sidebarState": "overlay",
+          "cameraPreset": "Overview",
+          "detailLevel": "overview",
+          "detailReason": "user",
+          "reduceMotion": false,
+          "queryableNodeCount": 25000,
+          "queryableEdgeCount": 59512,
+          "paintedNodeCount": 1200,
+          "paintedEdgeCount": 1800,
+          "communityAnchorCount": 100,
+          "persistentLabelCount": 8,
+          "activePromotionNodeCount": 0,
+          "overviewPaintBudget": {
+            "status": "pass",
+            "budget": 1200,
+            "allowance": 0,
+            "limit": 1200,
+            "observed": 1200
+          }
+        },
+        {
+          "scenario": "reduce-motion",
+          "sidebarState": "collapsed",
+          "cameraPreset": "Overview",
+          "detailLevel": "overview",
+          "detailReason": "user",
+          "reduceMotion": true,
+          "queryableNodeCount": 25000,
+          "queryableEdgeCount": 59512,
+          "paintedNodeCount": 1200,
+          "paintedEdgeCount": 1800,
+          "communityAnchorCount": 100,
+          "persistentLabelCount": 8,
+          "activePromotionNodeCount": 0,
+          "overviewPaintBudget": {
+            "status": "pass",
+            "budget": 1200,
+            "allowance": 0,
+            "limit": 1200,
+            "observed": 1200
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -19,8 +19,12 @@ export const DETAIL_REASONS = Object.freeze({
 
 const TIER_WEIGHT = Object.freeze({ A: 4, B: 3, C: 2, D: 1 });
 const DETAIL_BUDGETS = Object.freeze({
-  [DETAIL_LEVELS.OVERVIEW]: { nodeLimit: 1200, edgeLimit: 1800, hubsPerCommunity: 2 },
-  [DETAIL_LEVELS.BALANCED]: { nodeLimit: 5000, edgeLimit: 7500, hubsPerCommunity: 8 },
+  // Overview stays bounded for the 25k stress case while still exposing a
+  // legible majority when it is deliberately selected on a mid-size graph.
+  [DETAIL_LEVELS.OVERVIEW]: { nodeLimit: 7000, edgeLimit: 7000, hubsPerCommunity: 4 },
+  // The product default through a medium-large vault is Balanced. At 12–13k
+  // this preserves the graph's actual shape instead of showing a sparse proxy.
+  [DETAIL_LEVELS.BALANCED]: { nodeLimit: 10000, edgeLimit: 12000, hubsPerCommunity: 12 },
   [DETAIL_LEVELS.FULL]: { nodeLimit: Infinity, edgeLimit: Infinity, hubsPerCommunity: Infinity }
 });
 
@@ -29,12 +33,133 @@ const DETAIL_BUDGETS = Object.freeze({
  * width. Those are camera concerns and must not affect stable painted identity.
  */
 export function adaptiveDetailLevel(nodeCount = 0) {
-  return Number(nodeCount) <= 2500 ? DETAIL_LEVELS.BALANCED : DETAIL_LEVELS.OVERVIEW;
+  return Number(nodeCount) <= 16000 ? DETAIL_LEVELS.BALANCED : DETAIL_LEVELS.OVERVIEW;
 }
 
 export function normalizeDetailLevel(value, fallback = DETAIL_LEVELS.BALANCED) {
   const normalized = String(value || '').toLowerCase();
   return Object.values(DETAIL_LEVELS).includes(normalized) ? normalized : fallback;
+}
+
+/**
+ * Structural marks are capped by the detail level. Exact promoted identities
+ * are a separate allowance so an active search/path can never disappear.
+ * `communityCount` raises (never lowers) the structural limit so every
+ * community keeps one anchor even in an unusually fragmented graph.
+ */
+export function presentationPaintBudget(detailLevel, {
+  communityCount = 0,
+  promotionCount = 0
+} = {}) {
+  const level = normalizeDetailLevel(detailLevel);
+  const budget = DETAIL_BUDGETS[level] ?? DETAIL_BUDGETS[DETAIL_LEVELS.BALANCED];
+  const communities = Math.max(0, Math.floor(finiteNumber(communityCount, 0)));
+  const promotions = Math.max(0, Math.floor(finiteNumber(promotionCount, 0)));
+  const structuralNodeLimit = level === DETAIL_LEVELS.FULL
+    ? Infinity
+    : Math.max(budget.nodeLimit, communities);
+  return {
+    detailLevel: level,
+    structuralNodeLimit,
+    promotionAllowance: level === DETAIL_LEVELS.FULL ? Infinity : promotions,
+    paintedNodeLimit: level === DETAIL_LEVELS.FULL ? Infinity : structuralNodeLimit + promotions,
+    structuralEdgeLimit: budget.edgeLimit
+  };
+}
+
+/**
+ * Builds immutable-by-contract structural data for one graph revision. Keep the
+ * returned value alongside the renderer's existing queryable graph indexes and
+ * replace it only when graph/lens/layout metadata changes. It contains graph
+ * identities and numerical structure only; labels and note content are never
+ * copied into it.
+ */
+export function buildPresentationIndex({
+  nodes = [],
+  edges = [],
+  structuralRanks,
+  structuralRankNodeIds,
+  communityAnchors,
+  normalizedGraph,
+  normalizedNodes,
+  normalizedEdges,
+  degreeByNode,
+  edgesByNode,
+  communitiesByName,
+  communityByNodeId,
+  structuralEdgeRecords,
+  ambientEdgeRecords
+} = {}) {
+  const graph = Array.isArray(normalizedGraph?.nodes) && Array.isArray(normalizedGraph?.edges)
+    ? normalizedGraph
+    : Array.isArray(normalizedNodes) && Array.isArray(normalizedEdges)
+    ? preparedNormalizedGraph(normalizedNodes, normalizedEdges)
+    : normalizePresentationGraph(nodes, edges);
+  const rankById = normalizeRankMap(structuralRanks, graph.nodes, structuralRankNodeIds ?? nodes);
+  const degreeById = degreeByNode instanceof Map ? degreeByNode : buildDegreeMap(graph.nodes, graph.edges);
+  const byCommunity = communitiesByName instanceof Map ? communitiesByName : groupByCommunity(graph.nodes);
+  const communityAnchorByName = resolveCommunityAnchors(graph, degreeById, rankById, communityAnchors, byCommunity);
+  const hubIdsByCommunity = new Map();
+  for (const [community, records] of byCommunity) {
+    hubIdsByCommunity.set(community, records
+      .slice()
+      .sort((left, right) => compareStructuralNodes(left, right, rankById, degreeById))
+      .slice(0, DETAIL_BUDGETS[DETAIL_LEVELS.BALANCED].hubsPerCommunity)
+      .map((node) => node.id));
+  }
+  const bridgeIds = bridgeEndpointIds(graph.edges, graph.nodes, rankById, degreeById);
+  const representativeIds = representativeRounds(byCommunity, rankById, degreeById);
+  const nodeCommunityById = communityByNodeId instanceof Map
+    ? communityByNodeId
+    : new Map(graph.nodes.map((node) => [node.id, node.community]));
+  const nodeById = new Map(graph.nodes.map((node) => [node.id, node]));
+  const edgeById = new Map(graph.edges.map((edge) => [edge.id, edge]));
+  const adjacencyByNode = edgesByNode instanceof Map ? edgesByNode : buildEdgesByNode(graph.nodes, graph.edges);
+  const structuralEdges = Array.isArray(structuralEdgeRecords)
+    ? structuralEdgeRecords
+    : orderedIndexedEdges(
+      graph.edges.filter((edge) => nodeCommunityById.get(edge.source) !== nodeCommunityById.get(edge.target)),
+      degreeById,
+      rankById
+    );
+  const ambientEdges = Array.isArray(ambientEdgeRecords)
+    ? ambientEdgeRecords
+    : orderedIndexedEdges(
+      graph.edges.filter((edge) => nodeCommunityById.get(edge.source) === nodeCommunityById.get(edge.target)),
+      degreeById,
+      rankById
+    );
+  const indexedEdgeById = new Map([...structuralEdges, ...ambientEdges].map((record) => [record.edgeId, record]));
+  const baseNodeTiers = classifyNodeTiers({
+    nodes: graph.nodes,
+    degreeById,
+    rankById,
+    communityAnchorByName
+  });
+  return Object.freeze({
+    kind: 'brainbar-graph3d-presentation-index-v1',
+    graph,
+    rankById,
+    degreeById,
+    byCommunity,
+    communityAnchorByName,
+    communityByNodeId: nodeCommunityById,
+    nodeById,
+    edgeById,
+    edgesByNode: adjacencyByNode,
+    structuralEdges,
+    ambientEdges,
+    indexedEdgeById,
+    structuralEdgeIds: new Set(structuralEdges.map(({ edgeId }) => edgeId)),
+    ambientEdgeIds: new Set(ambientEdges.map(({ edgeId }) => edgeId)),
+    baseNodeTiers,
+    structuralCandidates: Object.freeze({
+      anchors: [...communityAnchorByName.values()],
+      hubIdsByCommunity,
+      bridgeIds,
+      representativeIds
+    })
+  });
 }
 
 /**
@@ -61,7 +186,13 @@ export function resolveZoomDetailLevel({
   }
 
   const normalizedZoom = finiteNumber(zoom, 0);
+  const hasPreviousAutomaticLevel = Object.values(DETAIL_LEVELS).includes(String(previousAutoDetailLevel || '').toLowerCase());
   let next = normalizeDetailLevel(previousAutoDetailLevel, adaptiveDetailLevel(nodeCount));
+  // The first frame is the adaptive default, not an implicit zoom-out event.
+  // Subsequent camera changes apply hysteresis around that explicit baseline.
+  if (!hasPreviousAutomaticLevel) {
+    return { detailLevel: next, detailReason: DETAIL_REASONS.ADAPTIVE_DEFAULT, nextAutoDetailLevel: next };
+  }
   // Enter thresholds are deliberately higher than the corresponding exits.
   if (next === DETAIL_LEVELS.OVERVIEW && normalizedZoom >= 0.70) {
     next = DETAIL_LEVELS.BALANCED;
@@ -103,11 +234,13 @@ export function reduceMotionPolicy(reduceMotion = false) {
 /**
  * Creates an ordered presentation plan. `structuralRanks` and
  * `communityAnchors` are optional Worker-owned metadata: ranks use lower values
- * for greater importance (a Map/object or a Uint32Array aligned to `nodes`),
+ * for greater importance (a Map/object or a Uint32Array aligned to `nodes`,
+ * or to explicit `structuralRankNodeIds`),
  * anchors map a community identity to a node identity.
  * When absent the same result is deterministically derived from this graph.
  */
 export function buildPresentationPlan({
+  index,
   nodes = [],
   edges = [],
   detailLevel,
@@ -118,6 +251,7 @@ export function buildPresentationPlan({
   performanceDegrade = false,
   interaction = {},
   structuralRanks,
+  structuralRankNodeIds,
   communityAnchors,
   healthAttentionNodeIds = [],
   projectedNodes,
@@ -126,33 +260,30 @@ export function buildPresentationPlan({
   labelBudget,
   reduceMotion = false
 } = {}) {
-  const graph = normalizePresentationGraph(nodes, edges);
+  const structuralIndex = isPresentationIndex(index)
+    ? index
+    : buildPresentationIndex({ nodes, edges, structuralRanks, structuralRankNodeIds, communityAnchors });
+  const graph = structuralIndex.graph;
   const automatic = resolveZoomDetailLevel({
     nodeCount: graph.nodes.length,
     zoom,
-    previousAutoDetailLevel,
-    userDetailLevel: userDetailLevel || detailLevel,
+    previousAutoDetailLevel: previousAutoDetailLevel ?? (detailReason === DETAIL_REASONS.USER ? undefined : detailLevel),
+    userDetailLevel,
     performanceDegrade
   });
-  const level = normalizeDetailLevel(detailLevel, automatic.detailLevel);
+  const level = automatic.detailLevel;
   const resolvedReason = validDetailReason(detailReason)
     ? detailReason
-    : (detailLevel && !userDetailLevel ? DETAIL_REASONS.USER : automatic.detailReason);
-  const rankById = normalizeRankMap(structuralRanks, graph.nodes);
-  const degreeById = buildDegreeMap(graph.nodes, graph.edges);
-  const promotions = collectInteractionPromotion(interaction, graph.edges);
+    : automatic.detailReason;
+  const rankById = structuralIndex.rankById;
+  const degreeById = structuralIndex.degreeById;
+  const promotions = collectInteractionPromotion(interaction, structuralIndex.edgeById);
   normalizeIdSet(healthAttentionNodeIds).forEach((id) => promotions.nodeIds.add(id));
-  const communityAnchorByName = resolveCommunityAnchors(graph, degreeById, rankById, communityAnchors);
-  const nodeTiers = classifyNodeTiers({
-    nodes: graph.nodes,
-    degreeById,
-    rankById,
-    communityAnchorByName,
-    promotedNodeIds: promotions.nodeIds,
-    healthAttentionNodeIds
-  });
+  const communityAnchorByName = structuralIndex.communityAnchorByName;
+  const nodeTiers = resolveIndexedNodeTiers(structuralIndex, promotions.nodeIds, healthAttentionNodeIds);
   const nodeSelection = selectPaintedNodes({
     graph,
+    index: structuralIndex,
     level,
     degreeById,
     rankById,
@@ -162,6 +293,7 @@ export function buildPresentationPlan({
   });
   const edgeSelection = selectPaintedEdges({
     graph,
+    index: structuralIndex,
     level,
     nodeIds: nodeSelection.nodeIds,
     promotionEdgeIds: promotions.edgeIds,
@@ -194,6 +326,10 @@ export function buildPresentationPlan({
     communityAnchorCount: communityAnchorByName.size,
     persistentLabelCount: labels.length
   });
+  const paintBudget = presentationPaintBudget(level, {
+    communityCount: communityAnchorByName.size,
+    promotionCount: promotions.nodeIds.size
+  });
 
   return {
     detailLevel: level,
@@ -206,6 +342,9 @@ export function buildPresentationPlan({
     nodeTiersById: nodeTiers,
     communityAnchorByName,
     communityAnchorIds: [...communityAnchorByName.values()].sort(compareIds),
+    paintBudget,
+    activePromotionNodeCount: promotions.nodeIds.size,
+    structuralPaintedNodeCount: nodeSelection.structuralNodeCount,
     persistentLabels: labels,
     motion: reduceMotionPolicy(reduceMotion),
     diagnostics
@@ -255,6 +394,47 @@ export function normalizePresentationGraph(nodes = [], edges = []) {
   };
 }
 
+function preparedNormalizedGraph(nodes, edges) {
+  const nodeById = new Map();
+  for (const node of nodes) {
+    const id = stableNodeId(node);
+    if (!id) continue;
+    const prepared = { id, community: stableCommunity(node) };
+    const existing = nodeById.get(id);
+    if (!existing || comparePreparedNodes(prepared, existing) < 0) {
+      nodeById.set(id, prepared);
+    }
+  }
+  const preparedNodes = [...nodeById.values()].sort((left, right) => compareIds(left.id, right.id));
+  const nodeIds = new Set(preparedNodes.map((node) => node.id));
+  const edgeById = new Map();
+  for (const edge of edges) {
+    const id = stableEndpoint(edge?.id);
+    const source = stableEndpoint(edge?.source ?? edge?.from);
+    const target = stableEndpoint(edge?.target ?? edge?.to);
+    if (!id || !nodeIds.has(source) || !nodeIds.has(target)) continue;
+    const prepared = { id, source, target };
+    const existing = edgeById.get(id);
+    if (!existing || comparePreparedEdges(prepared, existing) < 0) {
+      edgeById.set(id, prepared);
+    }
+  }
+  return {
+    nodes: preparedNodes,
+    edges: [...edgeById.values()].sort((left, right) => compareIds(left.id, right.id))
+  };
+}
+
+function comparePreparedNodes(left, right) {
+  return compareIds(left.community, right.community) || compareIds(left.id, right.id);
+}
+
+function comparePreparedEdges(left, right) {
+  return compareIds(left.source, right.source)
+    || compareIds(left.target, right.target)
+    || compareIds(left.id, right.id);
+}
+
 export function classifyNodeTiers({
   nodes = [],
   degreeById = new Map(),
@@ -278,6 +458,17 @@ export function classifyNodeTiers({
     if (attention.has(node.id) && tier === 'D') tier = 'C';
     if (promoted.has(node.id)) tier = 'A';
     tiers.set(node.id, tier);
+  });
+  return tiers;
+}
+
+function resolveIndexedNodeTiers(index, promotedNodeIds, healthAttentionNodeIds) {
+  const tiers = new Map(index.baseNodeTiers);
+  const promoted = normalizeIdSet(promotedNodeIds);
+  const attention = normalizeIdSet(healthAttentionNodeIds);
+  promoted.forEach((id) => tiers.set(id, 'A'));
+  attention.forEach((id) => {
+    if (!promoted.has(id) && index.baseNodeTiers.get(id) === 'D') tiers.set(id, 'C');
   });
   return tiers;
 }
@@ -330,13 +521,16 @@ export function allocateLabels({
   candidates = [],
   projectedNodes,
   safeRegions = [],
+  bounds,
   retainedLabelIds = [],
   budget = 0,
-  maxOverlapArea = 0
+  maxOverlapArea = 0,
+  labelMetrics
 } = {}) {
   const retained = normalizeIdSet(retainedLabelIds);
   const limit = Math.max(0, Math.floor(finiteNumber(budget, 0)));
   const reserved = normalizeRects(safeRegions);
+  const labelBounds = normalizeRect(bounds);
   const accepted = [];
   const ordered = (candidates || []).map((candidate) => ({
     ...candidate,
@@ -355,7 +549,9 @@ export function allocateLabels({
 
   for (const candidate of ordered) {
     if (accepted.length >= limit) break;
-    const rect = labelRect(candidate);
+    const metrics = typeof labelMetrics === 'function' ? labelMetrics(candidate) : null;
+    const rect = labelRect(metrics ? { ...candidate, ...metrics } : candidate);
+    if (labelBounds && !rectIsWithinBounds(rect, labelBounds)) continue;
     const allowedOverlap = retained.has(candidate.id) ? Math.max(maxOverlapArea, 12) : maxOverlapArea;
     if (reserved.some((other) => overlapArea(rect, other) > allowedOverlap)) continue;
     accepted.push({ id: candidate.id, tier: candidate.tier, active: candidate.active, rect });
@@ -385,64 +581,214 @@ export function presentationDiagnostics({
   };
 }
 
-function selectPaintedNodes({ graph, level, degreeById, rankById, communityAnchorByName, promotions, healthAttentionNodeIds }) {
+function selectPaintedNodes({ graph, index, level, degreeById, rankById, communityAnchorByName, promotions, healthAttentionNodeIds }) {
   const budget = DETAIL_BUDGETS[level] ?? DETAIL_BUDGETS[DETAIL_LEVELS.BALANCED];
-  const nodeById = new Map(graph.nodes.map((node) => [node.id, node]));
+  const nodeById = index?.nodeById ?? new Map(graph.nodes.map((node) => [node.id, node]));
+  const byCommunity = index?.byCommunity ?? groupByCommunity(graph.nodes);
   const selected = new Set();
+  const staticNodeIds = new Set();
   const add = (id) => {
     if (nodeById.has(id)) selected.add(id);
   };
+  // Promotion is the only reason a plan may exceed its structural budget. This
+  // keeps Search/Path/etc. exact while preventing a dense cross-community graph
+  // from turning every bridge endpoint into an Overview mark.
+  const paintBudget = presentationPaintBudget(level, {
+    communityCount: byCommunity.size,
+    promotionCount: promotions.nodeIds.size
+  });
+  const structuralLimit = paintBudget.structuralNodeLimit;
+  const addStructural = (id) => {
+    if (!nodeById.has(id) || selected.has(id) || staticNodeIds.size >= structuralLimit) return;
+    staticNodeIds.add(id);
+    selected.add(id);
+  };
   promotions.nodeIds.forEach(add);
-  communityAnchorByName.forEach(add);
+  (index?.structuralCandidates?.anchors ?? [...communityAnchorByName.values()]).forEach(addStructural);
   if (level === DETAIL_LEVELS.FULL) {
     graph.nodes.forEach((node) => add(node.id));
-    return { nodeIds: [...selected].sort(compareIds), nodeIdSet: selected };
+    return { nodeIds: [...selected].sort(compareIds), nodeIdSet: selected, structuralNodeCount: graph.nodes.length };
   }
 
-  const byCommunity = groupByCommunity(graph.nodes);
-  const target = Math.max(selected.size, budget.nodeLimit);
   // Structural hubs, bridge endpoints, and Recent context are added before
-  // representative samples, exactly in the product priority order.
-  for (const records of byCommunity.values()) {
-    records
-      .slice()
-      .sort((left, right) => compareStructuralNodes(left, right, rankById, degreeById))
-      .slice(0, budget.hubsPerCommunity)
-      .forEach((node) => add(node.id));
+  // representative samples, exactly in the product priority order. Each
+  // structural source is capped by the same per-level budget.
+  const cachedHubs = index?.structuralCandidates?.hubIdsByCommunity;
+  if (cachedHubs) {
+    for (const hubIds of cachedHubs.values()) {
+      hubIds.slice(0, budget.hubsPerCommunity).forEach(addStructural);
+    }
+  } else {
+    for (const records of byCommunity.values()) {
+      records
+        .slice()
+        .sort((left, right) => compareStructuralNodes(left, right, rankById, degreeById))
+        .slice(0, budget.hubsPerCommunity)
+        .forEach((node) => addStructural(node.id));
+    }
   }
-  bridgeEndpointIds(graph.edges, graph.nodes).forEach(add);
-  normalizeIdSet(healthAttentionNodeIds).forEach(add);
-  normalizeIdSet(promotions.recentNodeIds).forEach(add);
+  (index?.structuralCandidates?.bridgeIds ?? bridgeEndpointIds(graph.edges, graph.nodes, rankById, degreeById)).forEach(addStructural);
+  normalizeIdSet(healthAttentionNodeIds).forEach(addStructural);
+  normalizeIdSet(promotions.recentNodeIds).forEach(addStructural);
 
-  const representatives = representativeRounds(byCommunity, rankById, degreeById);
+  const representatives = index?.structuralCandidates?.representativeIds ?? representativeRounds(byCommunity, rankById, degreeById);
   for (const id of representatives) {
-    if (selected.size >= target) break;
-    add(id);
+    if (staticNodeIds.size >= structuralLimit) break;
+    addStructural(id);
   }
-  return { nodeIds: [...selected].sort(compareIds), nodeIdSet: selected };
+  return { nodeIds: [...selected].sort(compareIds), nodeIdSet: selected, structuralNodeCount: staticNodeIds.size };
 }
 
-function selectPaintedEdges({ graph, level, nodeIds, promotionEdgeIds, interaction, degreeById, rankById }) {
+function selectPaintedEdges({ graph, index, level, nodeIds, promotionEdgeIds, interaction, degreeById, rankById }) {
   const budget = DETAIL_BUDGETS[level] ?? DETAIL_BUDGETS[DETAIL_LEVELS.BALANCED];
   const nodeIdSet = nodeIds instanceof Set ? nodeIds : new Set(nodeIds || []);
-  const communityByNodeId = new Map(graph.nodes.map((node) => [node.id, node.community]));
   const activeEdgeIds = normalizeIdSet(promotionEdgeIds);
-  const ordered = prioritizeEdges({ edges: graph.edges, interaction, degreeById, rankById, communityByNodeId });
   const selected = new Set();
-  for (const candidate of ordered) {
-    const { edge, edgeId, priority } = candidate;
-    const active = activeEdgeIds.has(edgeId) || priority < 6;
-    const endpointsPainted = nodeIdSet.has(edge.source) && nodeIdSet.has(edge.target);
-    if (!active && !endpointsPainted) continue;
-    if (level === DETAIL_LEVELS.OVERVIEW && priority > 6) continue;
-    if (selected.size >= budget.edgeLimit && !active) continue;
-    selected.add(edgeId);
+  if (level === DETAIL_LEVELS.FULL) {
+    graph.edges.forEach((edge) => selected.add(edge.id));
+    return { edgeIds: [...selected].sort(compareIds), edgeIdSet: selected };
   }
-  if (level === DETAIL_LEVELS.FULL) graph.edges.forEach((edge) => selected.add(edge.id));
+
+  const edgeIndex = index;
+  const priorityByEdgeId = interactionEdgePriorities(interaction, edgeIndex);
+  const priorityBuckets = new Map();
+  priorityByEdgeId.forEach((priority, edgeId) => {
+    const edge = edgeIndex.edgeById.get(edgeId);
+    if (!edge) return;
+    const bucket = priorityBuckets.get(priority) ?? [];
+    bucket.push(indexedEdgeRecord(edge, degreeById, rankById));
+    priorityBuckets.set(priority, bucket);
+  });
+  for (const priority of [1, 2, 3, 4, 5]) {
+    const bucket = priorityBuckets.get(priority);
+    if (!bucket) continue;
+    bucket.sort(compareIndexedEdges);
+    bucket.forEach(({ edgeId }) => selected.add(edgeId));
+  }
+
+  appendSelectedNodeEdges({
+    index: edgeIndex,
+    selected,
+    nodeIdSet,
+    priorityByEdgeId,
+    activeEdgeIds,
+    edgeLimit: budget.edgeLimit,
+    eligibleEdgeIds: edgeIndex.structuralEdgeIds
+  });
+  if (level !== DETAIL_LEVELS.OVERVIEW) {
+    appendSelectedNodeEdges({
+      index: edgeIndex,
+      selected,
+      nodeIdSet,
+      priorityByEdgeId,
+      activeEdgeIds,
+      edgeLimit: budget.edgeLimit,
+      eligibleEdgeIds: edgeIndex.ambientEdgeIds
+    });
+  }
   return { edgeIds: [...selected].sort(compareIds), edgeIdSet: selected };
 }
 
-function collectInteractionPromotion(interaction, edges) {
+function interactionEdgePriorities(interaction, index) {
+  const priorities = new Map();
+  const add = (edgeId, priority) => {
+    if (!index.edgeById.has(edgeId)) return;
+    const previous = priorities.get(edgeId);
+    if (previous == null || priority < previous) priorities.set(edgeId, priority);
+  };
+  const addForNodes = (nodeIds, priority) => {
+    normalizeIdSet(nodeIds).forEach((nodeId) => {
+      index.edgesByNode.get(nodeId)?.forEach((edge) => add(edge.id, priority));
+    });
+  };
+  addForNodes([interaction?.selectedNodeId, ...(interaction?.selectedNodeIds || [])], 1);
+  const pathEdges = normalizeIdSet([interaction?.pathEdgeId, ...(interaction?.pathEdgeIds || [])]);
+  if (pathEdges.size) pathEdges.forEach((edgeId) => add(edgeId, 2));
+  else addForNodes([interaction?.pathNodeId, ...(interaction?.pathNodeIds || [])], 2);
+  normalizeIdSet([
+    interaction?.edgeInspectorEdgeId,
+    interaction?.inspectedEdgeId,
+    ...(interaction?.edgeInspectorEdgeIds || []),
+    ...(interaction?.inspectedEdgeIds || [])
+  ]).forEach((edgeId) => add(edgeId, 3));
+  const workflowEdges = normalizeIdSet([interaction?.workflowEdgeId, ...(interaction?.workflowEdgeIds || [])]);
+  if (workflowEdges.size) workflowEdges.forEach((edgeId) => add(edgeId, 4));
+  else addForNodes([interaction?.workflowNodeId, ...(interaction?.workflowNodeIds || [])], 4);
+  addForNodes([
+    interaction?.recentNodeId,
+    interaction?.storyNodeId,
+    ...(interaction?.recentNodeIds || []),
+    ...(interaction?.storyNodeIds || [])
+  ], 5);
+  return priorities;
+}
+
+function appendSelectedNodeEdges({ index, selected, nodeIdSet, priorityByEdgeId, activeEdgeIds, edgeLimit, eligibleEdgeIds }) {
+  const candidates = new Map();
+  for (const nodeId of nodeIdSet) {
+    for (const edge of index.edgesByNode.get(nodeId) || []) {
+      if (!eligibleEdgeIds.has(edge.id) || !nodeIdSet.has(edge.source) || !nodeIdSet.has(edge.target)) continue;
+      candidates.set(edge.id, edge);
+    }
+  }
+  const ordered = [...candidates.values()]
+    .map((edge) => index.indexedEdgeById.get(edge.id))
+    .filter(Boolean)
+    .sort(compareIndexedEdges);
+  for (const { edge, edgeId } of ordered) {
+    if (priorityByEdgeId.has(edgeId)) continue;
+    if (!nodeIdSet.has(edge.source) || !nodeIdSet.has(edge.target)) continue;
+    if (selected.size >= edgeLimit && !activeEdgeIds.has(edgeId)) continue;
+    selected.add(edgeId);
+  }
+}
+
+function indexedEdgeRecord(edge, degreeById, rankById) {
+  return {
+    edge,
+    edgeId: edge.id,
+    importance: (Number(degreeById.get(edge.source)) || 0) + (Number(degreeById.get(edge.target)) || 0),
+    rank: Math.min(normalizedRank(rankById.get(edge.source)), normalizedRank(rankById.get(edge.target)))
+  };
+}
+
+function orderedIndexedEdges(edges, degreeById, rankById) {
+  const groups = new Map();
+  const idsAreOrdered = edges.every((edge, index) => index === 0 || compareIds(edges[index - 1].id, edge.id) <= 0);
+  for (const edge of edges) {
+    const record = indexedEdgeRecord(edge, degreeById, rankById);
+    const rankKey = Number.isFinite(record.rank) ? String(record.rank) : 'infinity';
+    const key = `${rankKey}\u0000${record.importance}`;
+    const bucket = groups.get(key) ?? { rank: record.rank, importance: record.importance, records: [] };
+    bucket.records.push(record);
+    groups.set(key, bucket);
+  }
+  const ordered = [];
+  [...groups.values()]
+    .sort((left, right) => left.rank - right.rank || right.importance - left.importance)
+    .forEach((bucket) => {
+      if (!idsAreOrdered) bucket.records.sort((left, right) => compareIds(left.edgeId, right.edgeId));
+      ordered.push(...bucket.records);
+    });
+  return ordered;
+}
+
+function buildEdgesByNode(nodes, edges) {
+  const result = new Map(nodes.map((node) => [node.id, []]));
+  for (const edge of edges) {
+    result.get(edge.source)?.push(edge);
+    if (edge.target !== edge.source) result.get(edge.target)?.push(edge);
+  }
+  return result;
+}
+
+function compareIndexedEdges(left, right) {
+  return left.rank - right.rank
+    || right.importance - left.importance
+    || compareIds(left.edgeId, right.edgeId);
+}
+
+function collectInteractionPromotion(interaction, edgeById) {
   const nodeIds = normalizeIdSet([
     interaction?.selectedNodeId,
     interaction?.hoverNodeId,
@@ -477,8 +823,9 @@ function collectInteractionPromotion(interaction, edges) {
     ...(interaction?.edgeInspectorEdgeIds || []),
     ...(interaction?.inspectedEdgeIds || [])
   ]);
-  for (const edge of edges) {
-    if (edgeIds.has(edge.id)) {
+  for (const edgeId of edgeIds) {
+    const edge = edgeById?.get(edgeId);
+    if (edge) {
       nodeIds.add(edge.source);
       nodeIds.add(edge.target);
     }
@@ -486,10 +833,10 @@ function collectInteractionPromotion(interaction, edges) {
   return { nodeIds, edgeIds, recentNodeIds: normalizeIdSet(interaction?.recentNodeIds) };
 }
 
-function resolveCommunityAnchors(graph, degreeById, rankById, suppliedAnchors) {
+function resolveCommunityAnchors(graph, degreeById, rankById, suppliedAnchors, preparedCommunities) {
   const supplied = normalizeAnchorMap(suppliedAnchors);
   const anchors = new Map();
-  for (const [community, records] of groupByCommunity(graph.nodes)) {
+  for (const [community, records] of (preparedCommunities ?? groupByCommunity(graph.nodes))) {
     const provided = supplied.get(community);
     if (provided && records.some((node) => node.id === provided)) {
       anchors.set(community, provided);
@@ -504,6 +851,7 @@ function resolveCommunityAnchors(graph, degreeById, rankById, suppliedAnchors) {
 function representativeRounds(byCommunity, rankById, degreeById) {
   const queues = [...byCommunity.entries()].map(([community, records]) => ({
     community,
+    cursor: 0,
     ids: records
       .slice()
       .sort((left, right) => (
@@ -514,17 +862,19 @@ function representativeRounds(byCommunity, rankById, degreeById) {
       .map((node) => node.id)
   })).sort((left, right) => compareIds(left.community, right.community));
   const result = [];
-  for (let round = 0; queues.some((queue) => queue.ids.length); round += 1) {
+  for (let round = 0; queues.some((queue) => queue.cursor < queue.ids.length); round += 1) {
     for (const queue of queues) {
-      const id = queue.ids.shift();
+      const id = queue.ids[queue.cursor];
+      queue.cursor += 1;
       if (id) result.push(id);
     }
   }
   return result;
 }
 
-function bridgeEndpointIds(edges, nodes) {
+function bridgeEndpointIds(edges, nodes, rankById, degreeById) {
   const communityById = new Map(nodes.map((node) => [node.id, node.community]));
+  const nodeById = new Map(nodes.map((node) => [node.id, node]));
   const ids = new Set();
   for (const edge of edges) {
     if (communityById.get(edge.source) !== communityById.get(edge.target)) {
@@ -532,7 +882,11 @@ function bridgeEndpointIds(edges, nodes) {
       ids.add(edge.target);
     }
   }
-  return [...ids].sort(compareIds);
+  return [...ids]
+    .map((id) => nodeById.get(id))
+    .filter(Boolean)
+    .sort((left, right) => compareStructuralNodes(left, right, rankById, degreeById))
+    .map((node) => node.id);
 }
 
 function buildDegreeMap(nodes, edges) {
@@ -544,10 +898,15 @@ function buildDegreeMap(nodes, edges) {
   return degrees;
 }
 
-function normalizeRankMap(value, nodes) {
+function normalizeRankMap(value, nodes, rankNodes = nodes) {
   const typedRanks = ArrayBuffer.isView(value) ? value : (value instanceof ArrayBuffer ? new Uint32Array(value) : null);
   if (typedRanks) {
-    return new Map(nodes.map((node, index) => [node.id, normalizedRank(typedRanks[index])]));
+    const ranks = new Map();
+    for (let index = 0; index < typedRanks.length; index += 1) {
+      const id = stableNodeId(rankNodes[index]);
+      if (id) ranks.set(id, normalizedRank(typedRanks[index]));
+    }
+    return ranks;
   }
   const raw = value instanceof Map ? value : new Map(Object.entries(value || {}));
   const ranks = new Map();
@@ -556,6 +915,20 @@ function normalizeRankMap(value, nodes) {
     if (Number.isFinite(Number(rank))) ranks.set(node.id, Number(rank));
   }
   return ranks;
+}
+
+function isPresentationIndex(value) {
+  return value?.kind === 'brainbar-graph3d-presentation-index-v1'
+    && Array.isArray(value?.graph?.nodes)
+    && Array.isArray(value?.graph?.edges)
+    && value.degreeById instanceof Map
+    && value.rankById instanceof Map
+    && value.byCommunity instanceof Map
+    && value.communityAnchorByName instanceof Map
+    && value.edgeById instanceof Map
+    && value.edgesByNode instanceof Map
+    && Array.isArray(value.structuralEdges)
+    && Array.isArray(value.ambientEdges);
 }
 
 function normalizeAnchorMap(value) {
@@ -631,6 +1004,24 @@ function normalizeRects(rects) {
     width: Math.max(0, finiteNumber(rect?.width)),
     height: Math.max(0, finiteNumber(rect?.height))
   })).filter((rect) => rect.width && rect.height);
+}
+
+function normalizeRect(rect) {
+  if (!rect) return null;
+  const normalized = {
+    x: finiteNumber(rect.x),
+    y: finiteNumber(rect.y),
+    width: Math.max(0, finiteNumber(rect.width)),
+    height: Math.max(0, finiteNumber(rect.height))
+  };
+  return normalized.width && normalized.height ? normalized : null;
+}
+
+function rectIsWithinBounds(rect, bounds) {
+  return rect.x >= bounds.x
+    && rect.y >= bounds.y
+    && rect.x + rect.width <= bounds.x + bounds.width
+    && rect.y + rect.height <= bounds.y + bounds.height;
 }
 
 function overlapArea(left, right) {

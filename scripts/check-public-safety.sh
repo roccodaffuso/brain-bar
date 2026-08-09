@@ -21,6 +21,13 @@ check_pattern "likely private keys" '-----BEGIN (RSA |OPENSSH |EC |DSA |)PRIVATE
 check_pattern "GitHub tokens" 'gh[pousr]_[A-Za-z0-9_]{20,}'
 check_pattern "Slack tokens" 'xox[baprs]-[A-Za-z0-9-]{20,}'
 
+if [ -d "outputs/graph3d-visual-acceptance" ]; then
+  if rg -a -n -- '/Users/|Documents/Brain/Brain|private_sentinel' outputs/graph3d-visual-acceptance; then
+    printf "\nPublic safety check failed: Graph3D visual acceptance artifacts contain a private marker\n" >&2
+    failures=1
+  fi
+fi
+
 if git ls-files | rg '(^|/)(config\.json|.*\.local\.json)$'; then
   printf "\nPublic safety check failed: versioned local config file\n" >&2
   failures=1

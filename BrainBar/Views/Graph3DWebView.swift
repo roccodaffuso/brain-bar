@@ -49,6 +49,7 @@ struct Graph3DWebView: NSViewRepresentable {
         context.coordinator.graphResourceVersion = Self.graphResourceVersion(readAccessURL: readAccessURL)
         context.coordinator.agentActivitySnapshot = agentActivitySnapshot
         context.coordinator.workflowSelectionID = workflowSelectionID
+        context.coordinator.receiveViewportCommand(viewportCommand)
         load(in: webView, context: context)
         context.coordinator.cancelGraphLoadIfNeeded(cancellationRequest, in: webView)
         return webView
@@ -66,7 +67,7 @@ struct Graph3DWebView: NSViewRepresentable {
         context.coordinator.graphResourceVersion = graphResourceVersion
         let didLoad = load(in: webView, context: context, force: didChangeGraph)
         let didCancel = context.coordinator.cancelGraphLoadIfNeeded(cancellationRequest, in: webView)
-        context.coordinator.pendingViewportCommand = viewportCommand
+        context.coordinator.receiveViewportCommand(viewportCommand)
         let didChangeSession = context.coordinator.sessionState != sessionState
         context.coordinator.sessionState = sessionState
         if context.coordinator.agentActivitySnapshot != agentActivitySnapshot {
@@ -99,7 +100,7 @@ struct Graph3DWebView: NSViewRepresentable {
             context.coordinator.applySessionStateIfNeeded(sessionState, in: webView)
         }
 
-        context.coordinator.applyViewportCommandIfNeeded(viewportCommand, in: webView)
+        context.coordinator.applyViewportCommandIfNeeded(context.coordinator.pendingViewportCommand, in: webView)
     }
 
     @discardableResult
@@ -257,6 +258,13 @@ struct Graph3DWebView: NSViewRepresentable {
             self.activeNavigation = webView.load(URLRequest(url: indexURL))
         }
 
+        /// Keeps the normal navigation delegate path intact while a hosted renderer test
+        /// reloads the digest-bound index with a test-only query flag.
+        func reloadIndexForTesting(_ indexURL: URL, in webView: WKWebView) {
+            self.indexURL = indexURL
+            self.activeNavigation = webView.load(URLRequest(url: indexURL))
+        }
+
         private func invalidateRendererWork(in webView: WKWebView) {
             activeNavigation = nil
             webView.stopLoading()
@@ -383,8 +391,19 @@ struct Graph3DWebView: NSViewRepresentable {
             evaluate("if (window.brainBarResetCamera) { window.brainBarResetCamera(); }", in: webView)
         }
 
+        func receiveViewportCommand(_ command: GraphViewportCommand?) {
+            guard let command else {
+                return
+            }
+            let lastReceivedID = max(lastViewportCommandID ?? -1, pendingViewportCommand?.id ?? -1)
+            guard command.id > lastReceivedID else {
+                return
+            }
+            pendingViewportCommand = command
+        }
+
         func applyViewportCommandIfNeeded(_ command: GraphViewportCommand?, in webView: WKWebView) {
-            guard graphReady, let command, lastViewportCommandID != command.id else {
+            guard graphReady, let command, command.id > (lastViewportCommandID ?? -1) else {
                 return
             }
             lastViewportCommandID = command.id
@@ -408,6 +427,16 @@ struct Graph3DWebView: NSViewRepresentable {
                 script = "if (window.brainBarStartPathFromNode3D) { window.brainBarStartPathFromNode3D(\(Graph3DWebView.jsStringLiteral(command.payload ?? ""))); }"
             case .showCommunity3D:
                 script = "if (window.brainBarShowCommunity3D) { window.brainBarShowCommunity3D(\(Graph3DWebView.jsStringLiteral(command.payload ?? ""))); }"
+            case .setDetailLevel:
+                script = "if (window.brainBarSetDetailLevel) { window.brainBarSetDetailLevel(\(Graph3DWebView.jsStringLiteral(command.payload ?? "overview"))); }"
+            case .setSidebarState:
+                script = "if (window.brainBarSetSidebarState) { window.brainBarSetSidebarState(\(Graph3DWebView.jsStringLiteral(command.payload ?? "collapsed"))); }"
+            case .setCameraPreset:
+                script = "if (window.brainBarApplyCameraPreset) { window.brainBarApplyCameraPreset(\(Graph3DWebView.jsStringLiteral(command.payload ?? "manual"))); }"
+            case .cameraBack:
+                script = "if (window.brainBarCameraBack) { window.brainBarCameraBack(); }"
+            case .setReduceMotion:
+                script = "if (window.brainBarSetReduceMotion) { window.brainBarSetReduceMotion(\(command.payload == "true" ? "true" : "false")); }"
             }
             evaluate(script, in: webView)
         }
@@ -464,10 +493,11 @@ struct Graph3DWebView: NSViewRepresentable {
                 guard let state = Graph3DWebView.decodeGraphSessionState(body) else {
                     return
                 }
-                sessionState = state
-                lastAppliedSessionState = state
+                let mergedState = state.preservingThreeDPresentation(from: sessionState)
+                sessionState = mergedState
+                lastAppliedSessionState = mergedState
                 Task { @MainActor in
-                    onSessionState(state)
+                    onSessionState(mergedState)
                 }
                 return
             }
@@ -719,7 +749,7 @@ extension Graph3DWebView {
 
     static func graphSessionJSON(_ state: GraphSessionState) -> String {
         guard
-            let data = try? JSONEncoder().encode(state),
+            let data = try? JSONEncoder().encode(state.normalized),
             let json = String(data: data, encoding: .utf8)
         else {
             return "{}"

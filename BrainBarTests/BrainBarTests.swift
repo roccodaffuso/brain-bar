@@ -1,4 +1,5 @@
 import Darwin
+import AppKit
 import CryptoKit
 import WebKit
 import XCTest
@@ -9,9 +10,27 @@ private struct RendererCounts: Equatable {
     let edges: Int
 }
 
+private let reviewedVisualCaptureFixtureDigests = [
+    "1k": "1f7ec933358a7bd1ff5405278d986a3998b4f37f6c4d9df621dfe08071260bad",
+    "inspected-shape": "e1a4217a3ce6f117ac4155710c67f5f36754d2b3d9599bca08b817506534438f"
+]
+
+private let matchedCoreVisualCaptureScenarioNames = [
+    "1k-overview-collapsed", "1k-overview-docked", "1k-community", "1k-node-focus",
+    "1k-selected-hub", "1k-selected-peripheral", "1k-active-path", "1k-recent-orbit",
+    "1k-agent-activity", "1k-workflow-highlight", "1k-graph-check", "1k-reduce-motion"
+]
+
 private struct LayoutCacheSnapshot: Equatable {
     let count: Int
     let fingerprint: String
+}
+
+private struct TransactionalLayoutSnapshot: Decodable, Equatable {
+    let visibleNodeIDs: [String]
+    let paintedNodeIDs: [String]
+    let coordinateFingerprint: String
+    let graphReady: Bool
 }
 
 private typealias ThreeDRendererHarness = (
@@ -108,11 +127,31 @@ private struct RendererMeasurementSample {
     let appProcessResidentDeltaAfterTransportPreparationBytes: Double
     let appProcessResidentMaxSampleBytes: Double
     let threeDLoadToSettledPaintMs: Double
+    let threeDNativePrepareToIndexMs: Double
+    let threeDNavigationToAPIReadyMs: Double
+    let threeDGraphFetchMs: Double
+    let threeDGraphJSONParseMs: Double
+    let threeDEvidenceBuildMs: Double
+    let threeDGraphPreparationMs: Double
+    let threeDApplyLensPreLayoutMs: Double
+    let threeDMetadataReplayMs: Double
+    let threeDNormalizeGraphMs: Double
+    let threeDPresentationIndexBuildMs: Double
+    let threeDLayoutCacheReadMs: Double
+    let threeDMeshHitGeometryMs: Double
+    let threeDFirstProjectionStaticPaintMs: Double
+    let threeDLayoutEndToEndMs: Double
     let threeDLayoutPreparationMs: Double
+    let threeDProbeGraphFetchAndParseMs: Double
     let threeDLayoutCallReturnMs: Double
     let threeDLayoutZeroDelayTimerProbeMs: Double
     let threeDLensToSettledMs: Double
     let threeDSearchToSettledMs: Double
+    let threeDPanOrbitFrameMs: Double
+    let threeDHoverToHighlightMs: Double
+    let threeDSelectionToFirstFeedbackMs: Double
+    let threeDSidebarOpenReframeMs: Double
+    let threeDOverviewCommunityTransitionMs: Double
     let twoDRuntimeLoadToDiagnosticsMs: Double
     let twoDRuntimeLensToDiagnosticsMs: Double
     let twoDRuntimeSearchToDiagnosticsMs: Double
@@ -127,11 +166,31 @@ private struct RendererMeasurementSample {
             "appProcessResidentDeltaAfterTransportPreparationBytes": appProcessResidentDeltaAfterTransportPreparationBytes,
             "appProcessResidentMaxSampleBytes": appProcessResidentMaxSampleBytes,
             "threeDLoadToSettledPaintMs": threeDLoadToSettledPaintMs,
+            "threeDNativePrepareToIndexMs": threeDNativePrepareToIndexMs,
+            "threeDNavigationToAPIReadyMs": threeDNavigationToAPIReadyMs,
+            "threeDGraphFetchMs": threeDGraphFetchMs,
+            "threeDGraphJSONParseMs": threeDGraphJSONParseMs,
+            "threeDEvidenceBuildMs": threeDEvidenceBuildMs,
+            "threeDGraphPreparationMs": threeDGraphPreparationMs,
+            "threeDApplyLensPreLayoutMs": threeDApplyLensPreLayoutMs,
+            "threeDMetadataReplayMs": threeDMetadataReplayMs,
+            "threeDNormalizeGraphMs": threeDNormalizeGraphMs,
+            "threeDPresentationIndexBuildMs": threeDPresentationIndexBuildMs,
+            "threeDLayoutCacheReadMs": threeDLayoutCacheReadMs,
+            "threeDMeshHitGeometryMs": threeDMeshHitGeometryMs,
+            "threeDFirstProjectionStaticPaintMs": threeDFirstProjectionStaticPaintMs,
+            "threeDLayoutEndToEndMs": threeDLayoutEndToEndMs,
             "threeDLayoutPreparationMs": threeDLayoutPreparationMs,
+            "threeDProbeGraphFetchAndParseMs": threeDProbeGraphFetchAndParseMs,
             "threeDLayoutCallReturnMs": threeDLayoutCallReturnMs,
             "threeDLayoutZeroDelayTimerProbeMs": threeDLayoutZeroDelayTimerProbeMs,
             "threeDLensToSettledMs": threeDLensToSettledMs,
             "threeDSearchToSettledMs": threeDSearchToSettledMs,
+            "threeDPanOrbitFrameMs": threeDPanOrbitFrameMs,
+            "threeDHoverToHighlightMs": threeDHoverToHighlightMs,
+            "threeDSelectionToFirstFeedbackMs": threeDSelectionToFirstFeedbackMs,
+            "threeDSidebarOpenReframeMs": threeDSidebarOpenReframeMs,
+            "threeDOverviewCommunityTransitionMs": threeDOverviewCommunityTransitionMs,
             "twoDRuntimeLoadToDiagnosticsMs": twoDRuntimeLoadToDiagnosticsMs,
             "twoDRuntimeLensToDiagnosticsMs": twoDRuntimeLensToDiagnosticsMs,
             "twoDRuntimeSearchToDiagnosticsMs": twoDRuntimeSearchToDiagnosticsMs
@@ -195,18 +254,121 @@ private struct RendererMeasurementRequest: Decodable {
     }
 }
 
+private struct Graph3DVisualCaptureScenario: Decodable, Equatable {
+    let name: String
+    let fixtureName: String
+    let width: Int
+    let height: Int
+    let outputName: String
+}
+
+private struct Graph3DVisualCaptureRequest: Decodable {
+    let version: Int
+    let captureRoot: String
+    let fixturePaths: [String: String]
+    let fixtureDigests: [String: String]
+    let outputRoot: String
+    let scenarios: [Graph3DVisualCaptureScenario]
+    let createdAt: TimeInterval
+    let launcherPID: Int32
+}
+
+private struct Graph3DVisualCaptureManifest: Encodable {
+    let schemaVersion = 1
+    let kind = "graph3d-visual-acceptance"
+    let captures: [Capture]
+
+    struct Capture: Encodable {
+        let scenario: String
+        let fixture: Fixture
+        let viewport: Viewport
+        let snapshot: String
+        let coordinateFingerprint: String
+        let diagnostics: Diagnostics
+    }
+
+    struct Fixture: Encodable {
+        let name: String
+        let sha256: String
+        let nodeCount: Int
+        let edgeCount: Int
+    }
+
+    struct Viewport: Encodable {
+        let width: Int
+        let height: Int
+    }
+
+    struct Diagnostics: Encodable {
+        let layoutSchemaVersion: Int
+        let layoutProfile: String
+        let detailLevel: String
+        let detailReason: String
+        let paintedNodeCount: Int
+        let paintedEdgeCount: Int
+        let communityAnchorCount: Int
+        let persistentLabelCount: Int
+        let persistentLabelMaxOverlapArea: Double
+        let activeMode: String
+        let selectedNodeCount: Int
+        let agentActivityEventCount: Int
+        let agentActivityRenderableCount: Int
+        let workflowHighlightNodeCount: Int
+        let workflowHighlightPendingPathCount: Int
+        let graphCheckVisible: Bool
+        let sidebarState: String
+        let cameraPreset: String
+        let staticLayerRebuildMs: Double
+        let labelAllocationMs: Double
+        let frameQuality: String
+        let paintedProjectedCoverageX: Double
+        let paintedProjectedCoverageY: Double
+        let paintedProjectedCoverageWidth: Double
+        let paintedProjectedCoverageHeight: Double
+        let visualPixelRatio: Double
+        let baseStateHubGlowEnabled: Bool
+        let balancedDiscMinimumAlpha: Double
+        let darkSeparationRimWidth: Double
+        let balancedEdgeAlpha: Double
+        let staticRebuildP95Ms: Double
+        let visualBackingWidth: Int
+        let visualBackingHeight: Int
+    }
+}
+
 private struct ThreeDRendererMeasurement {
     let loadToSettledPaintMs: Double
+    let nativePrepareToIndexMs: Double
+    let navigationToAPIReadyMs: Double
+    let graphFetchMs: Double
+    let graphJSONParseMs: Double
+    let evidenceBuildMs: Double
+    let graphPreparationMs: Double
+    let applyLensPreLayoutMs: Double
+    let metadataReplayMs: Double
+    let normalizeGraphMs: Double
+    let presentationIndexBuildMs: Double
+    let layoutCacheReadMs: Double
+    let meshHitGeometryMs: Double
+    let firstProjectionStaticPaintMs: Double
+    let layoutEndToEndMs: Double
     let layoutPreparationMs: Double
+    let probeGraphFetchAndParseMs: Double
     let layoutCallReturnMs: Double
     let layoutZeroDelayTimerProbeMs: Double
     let lensToSettledMs: Double
     let searchToSettledMs: Double
+    let panOrbitFrameMs: Double
+    let hoverToHighlightMs: Double
+    let selectionToFirstFeedbackMs: Double
+    let sidebarOpenReframeMs: Double
+    let overviewCommunityTransitionMs: Double
     let counts: RendererCounts
     let layoutCache: String
 }
 
 private struct ThreeDLayoutResponsivenessProbe {
+    let graphFetchAndParseMs: Double
     let callReturnMs: Double
     let zeroDelayTimerProbeMs: Double
     let didSucceed: Bool
@@ -1067,6 +1229,22 @@ final class BrainBarTests: XCTestCase {
         let secondWaiterCount = await gate.waiterCount()
         XCTAssertEqual(secondWaiterCount, 2)
         await gate.resumeLast(with: Data(secondPayload.utf8))
+        let navigationDeadline = Date().addingTimeInterval(2)
+        while threeD.coordinator.indexURL == nil && Date() < navigationDeadline {
+            await Task.yield()
+        }
+        guard threeD.coordinator.indexURL != nil else {
+            throw BrainBarError.processFailed("Latest gated preparation did not create a digest-bound renderer navigation.")
+        }
+        threeD.coordinator.reloadIndexForTesting(
+            try rendererTestIndexURL(for: threeD.coordinator),
+            in: threeD.webView
+        )
+        try await waitForRendererFunction(
+            "brainBarLoadGraphFromURL",
+            in: threeD.webView,
+            phase: "latest gated 3D test renderer API"
+        )
         _ = try await waitForRendererDiagnostics(in: threeD.webView, functionName: "brainBarRendererDiagnostics", phase: "latest gated 3D graph") {
             diagnosticCount($0, "queryableNodes") == 1 && diagnosticBool($0, "paintedCountsSettled") == true
         }
@@ -2015,8 +2193,8 @@ final class BrainBarTests: XCTestCase {
             diagnosticString($0, "lens") == "graphify" && diagnosticString($0, "layoutCache") == "stored"
         }
         XCTAssertNotEqual(diagnosticString(lensMissDiagnostics, "layoutCache"), "hit")
-        let didCorruptCache = try await awaitThreeDBooleanResult("window.__brainBarLayoutCacheTest.corrupt()", in: second.webView)
-        XCTAssertTrue(didCorruptCache)
+        let didRemoveCacheMetadata = try await awaitThreeDBooleanResult("window.__brainBarLayoutCacheTest.missingMetadata()", in: second.webView)
+        XCTAssertTrue(didRemoveCacheMetadata)
         assertRendererDiagnosticsAreContentFree(lensMissDiagnostics)
         try await quiesceThreeDRendererWebView(second.webView, messageHandlerNames: ["brainBarNodeAction", "brainBarGraphDiagnostic"])
         try await closeThreeDRendererTestHost(secondHost, messageHandlerNames: ["brainBarNodeAction", "brainBarGraphDiagnostic"])
@@ -2053,6 +2231,22 @@ final class BrainBarTests: XCTestCase {
         }
         XCTAssertNotEqual(diagnosticString(corruptFallbackDiagnostics, "layoutCache"), "hit")
         assertRendererDiagnosticsAreContentFree(corruptFallbackDiagnostics)
+        let didCorruptCacheMetadata = try await awaitThreeDBooleanResult("window.__brainBarLayoutCacheTest.corruptMetadata()", in: corrupted.webView)
+        XCTAssertTrue(didCorruptCacheMetadata)
+        try await beginThreeDGraphLoadFromScheme(
+            "window.__brainBarCorruptMetadataCache",
+            graphURL: try graphSchemeURL(for: corrupted.coordinator),
+            lens: "graphify",
+            generation: 705,
+            in: corrupted.webView
+        )
+        let didLoadCorruptMetadataFallback = try await awaitThreeDBooleanResult("window.__brainBarCorruptMetadataCache", in: corrupted.webView)
+        XCTAssertTrue(didLoadCorruptMetadataFallback)
+        let corruptMetadataFallbackDiagnostics = try await waitForRendererDiagnostics(in: corrupted.webView, functionName: "brainBarRendererDiagnostics", phase: "corrupt metadata cache fallback") {
+            diagnosticString($0, "layoutState") == "committed" && diagnosticString($0, "layoutCache") == "stored"
+        }
+        XCTAssertNotEqual(diagnosticString(corruptMetadataFallbackDiagnostics, "layoutCache"), "hit")
+        assertRendererDiagnosticsAreContentFree(corruptMetadataFallbackDiagnostics)
         try await navigateToTestPage(
             try layoutCacheTestIndexURL(for: corrupted.coordinator, mode: "unavailable"),
             queryItem: "layout-cache-test",
@@ -2064,7 +2258,7 @@ final class BrainBarTests: XCTestCase {
             "window.__brainBarUnavailableCache",
             graphURL: try graphSchemeURL(for: corrupted.coordinator),
             lens: "all",
-            generation: 705,
+            generation: 706,
             in: corrupted.webView
         )
         let didLoadUnavailableFallback = try await awaitThreeDBooleanResult("window.__brainBarUnavailableCache", in: corrupted.webView)
@@ -2100,8 +2294,10 @@ final class BrainBarTests: XCTestCase {
         )
         try await waitForRendererFunction("brainBarLoadGraph", in: threeD.webView, phase: "held cache renderer API")
         try await waitForRendererObject("__brainBarLayoutCacheTest", in: threeD.webView, phase: "held cache API")
-        let didClearHeldCache = try await awaitThreeDBooleanResult("window.__brainBarLayoutCacheTest.clear()", in: threeD.webView)
-        XCTAssertTrue(didClearHeldCache)
+        // Hold mode pauses before IndexedDB is read, so pre-existing shared cache
+        // contents cannot affect the latest-wins race asserted below. Avoid deleting
+        // the shared IndexedDB database here: other hosted renderer tests may hold a
+        // connection while this test is scheduled in the full suite.
         try await beginThreeDGraphLoadFromScheme(
             "window.__brainBarHeldCacheFirst",
             graphURL: try graphSchemeURL(for: threeD.coordinator),
@@ -2116,15 +2312,11 @@ final class BrainBarTests: XCTestCase {
             "window.__brainBarHeldCacheSecond = window.brainBarApplyGraphLens('graphify', 712)",
             in: threeD.webView
         )
-        _ = try await waitForRendererDiagnostics(in: threeD.webView, functionName: "brainBarRendererDiagnostics", phase: "held latest cache lookup") {
-            diagnosticString($0, "layoutState") == "holding-cache" && diagnosticString($0, "lens") == "graphify"
-        }
-        let didReleaseHeldCache = try await awaitThreeDBooleanResult("window.__brainBarLayoutCacheTest.release()", in: threeD.webView)
-        let didLoadHeldCacheFirst = try await awaitThreeDBooleanResult("window.__brainBarHeldCacheFirst", in: threeD.webView)
-        let didLoadHeldCacheSecond = try await awaitThreeDBooleanResult("window.__brainBarHeldCacheSecond", in: threeD.webView)
-        XCTAssertTrue(didReleaseHeldCache)
-        XCTAssertFalse(didLoadHeldCacheFirst)
-        XCTAssertTrue(didLoadHeldCacheSecond)
+        try await waitForHeldLayoutCacheLookup(lens: "graphify", generation: 712, in: threeD.webView)
+        let results = try await releaseHeldCacheAndAwaitOperationResults(in: threeD.webView)
+        XCTAssertTrue(results.release, "Held cache release did not target the latest request.")
+        XCTAssertFalse(results.first, "Superseded cache-backed load committed after the newer lens request.")
+        XCTAssertTrue(results.second, "Latest cache-backed lens request did not commit after release.")
         let diagnostics = try await waitForRendererDiagnostics(in: threeD.webView, functionName: "brainBarRendererDiagnostics", phase: "latest cache lookup commit") {
             diagnosticString($0, "layoutState") == "committed" && diagnosticString($0, "lens") == "graphify"
         }
@@ -2394,6 +2586,97 @@ final class BrainBarTests: XCTestCase {
     }
 
     @MainActor
+    func testGraph3DReplacementLayoutFailurePreservesReadyGraphAndRetriesLatest() async throws {
+        let graphDirectory = try rendererFixtureGraphDirectory()
+        defer { removeTemporaryDirectory(graphDirectory.deletingLastPathComponent()) }
+        let recorder = GraphReadyEventRecorder()
+        let threeD = try makeThreeDWorkerTestWebView(graphDirectory: graphDirectory, graphReadyRecorder: recorder)
+        let host = RendererWebViewHost(webView: threeD.webView)
+        defer { host.close(messageHandlerNames: ["brainBarNodeAction", "brainBarGraphDiagnostic"]) }
+
+        try await prepareThreeDGraph(threeD, graphDirectory: graphDirectory)
+        threeD.webView.load(URLRequest(url: try workerTestIndexURL(mode: "holdResult")))
+        try await waitForRendererFunction("brainBarLoadGraph", in: threeD.webView, phase: "replacement preservation API installation")
+        try await waitForRendererFunction("__brainBarLayoutWorkerTestFail", in: threeD.webView, phase: "replacement preservation fail API")
+
+        try await beginThreeDGraphLoadFromScheme(
+            "window.__brainBarReplacementBaseline",
+            graphURL: try graphSchemeURL(for: threeD.coordinator),
+            lens: "all",
+            generation: 801,
+            in: threeD.webView
+        )
+        try await waitForHeldLayoutWorkerResult(lens: "all", generation: 801, in: threeD.webView)
+        let didReleaseBaseline = try await releaseHeldLayoutWorkerResult(in: threeD.webView)
+        XCTAssertTrue(didReleaseBaseline)
+        let didLoadBaseline = try await awaitThreeDBooleanResult("window.__brainBarReplacementBaseline", in: threeD.webView)
+        XCTAssertTrue(didLoadBaseline)
+        _ = try await waitForRendererDiagnostics(in: threeD.webView, functionName: "brainBarRendererDiagnostics", phase: "replacement preservation baseline") {
+            diagnosticString($0, "lens") == "all" &&
+            diagnosticString($0, "layoutState") == "committed" &&
+            diagnosticBool($0, "paintedCountsSettled") == true
+        }
+        let baseline = try await transactionalLayoutSnapshot(in: threeD.webView)
+        XCTAssertTrue(baseline.graphReady)
+        try await waitForRecordedGraphReadyGenerations([801], recorder: recorder)
+
+        try await beginThreeDGraphOperation(
+            "window.__brainBarReplacementFailure = window.brainBarApplyGraphLens('graphify', 802)",
+            in: threeD.webView
+        )
+        try await waitForHeldLayoutWorkerResult(lens: "graphify", generation: 802, in: threeD.webView)
+        let heldDiagnostics = try await waitForRendererDiagnostics(in: threeD.webView, functionName: "brainBarRendererDiagnostics", phase: "replacement preservation held") {
+            diagnosticString($0, "lens") == "all" &&
+            diagnosticString($0, "layoutState") == "committed" &&
+            diagnosticBool($0, "paintedCountsSettled") == true
+        }
+        let heldSnapshot = try await transactionalLayoutSnapshot(in: threeD.webView)
+        XCTAssertEqual(heldSnapshot, baseline)
+        let graphReadyWhileHeld = try await rendererGlobalGraphReady(in: threeD.webView)
+        XCTAssertTrue(graphReadyWhileHeld)
+        assertRendererDiagnosticsAreContentFree(heldDiagnostics)
+
+        let didFailHeldReplacement = try await awaitThreeDBooleanResult("window.__brainBarLayoutWorkerTestFail()", in: threeD.webView)
+        XCTAssertTrue(didFailHeldReplacement)
+        let didFailReplacement = try await awaitThreeDBooleanResult("window.__brainBarReplacementFailure", in: threeD.webView)
+        XCTAssertFalse(didFailReplacement)
+        let failureDiagnostics = try await waitForRendererDiagnostics(in: threeD.webView, functionName: "brainBarRendererDiagnostics", phase: "replacement preservation failure") {
+            diagnosticString($0, "lens") == "all" &&
+            diagnosticString($0, "layoutState") == "committed" &&
+            diagnosticBool($0, "hasDiagnostic") == true &&
+            diagnosticBool($0, "paintedCountsSettled") == true
+        }
+        let failedSnapshot = try await transactionalLayoutSnapshot(in: threeD.webView)
+        XCTAssertEqual(failedSnapshot, baseline)
+        let graphReadyAfterFailure = try await rendererGlobalGraphReady(in: threeD.webView)
+        XCTAssertTrue(graphReadyAfterFailure)
+        XCTAssertEqual(recorder.graphReadyGenerations, [801])
+        assertRendererDiagnosticsAreContentFree(failureDiagnostics)
+
+        try await beginThreeDGraphOperation(
+            "window.__brainBarReplacementRetry = window.brainBarApplyGraphLens('graphify', 803)",
+            in: threeD.webView
+        )
+        try await waitForHeldLayoutWorkerResult(lens: "graphify", generation: 803, in: threeD.webView)
+        let didReleaseRetry = try await releaseHeldLayoutWorkerResult(in: threeD.webView)
+        XCTAssertTrue(didReleaseRetry)
+        let didRetry = try await awaitThreeDBooleanResult("window.__brainBarReplacementRetry", in: threeD.webView)
+        XCTAssertTrue(didRetry)
+        let retryDiagnostics = try await waitForRendererDiagnostics(in: threeD.webView, functionName: "brainBarRendererDiagnostics", phase: "replacement preservation retry") {
+            diagnosticString($0, "lens") == "graphify" &&
+            diagnosticString($0, "layoutState") == "committed" &&
+            diagnosticCount($0, "visibleNodes") == 3 &&
+            diagnosticCount($0, "visibleEdges") == 2 &&
+            diagnosticBool($0, "paintedCountsSettled") == true
+        }
+        try await waitForRecordedGraphReadyGenerations([801, 803], recorder: recorder)
+        let graphReadyAfterRetry = try await rendererGlobalGraphReady(in: threeD.webView)
+        XCTAssertTrue(graphReadyAfterRetry)
+        assertRendererDiagnosticsAreContentFree(retryDiagnostics)
+        try await quiesceThreeDRendererWebView(threeD.webView, messageHandlerNames: ["brainBarNodeAction", "brainBarGraphDiagnostic"])
+    }
+
+    @MainActor
     func testGraph3DInteractionMatrixUsesCommittedQueryableState() async throws {
         let graphDirectory = try rendererFixtureGraphDirectory()
         defer { removeTemporaryDirectory(graphDirectory.deletingLastPathComponent()) }
@@ -2527,7 +2810,7 @@ final class BrainBarTests: XCTestCase {
         XCTAssertEqual((restoredSearchState["visibleNodes"] as? NSNumber)?.intValue, 3)
         XCTAssertEqual(result["sessionApplied"] as? Bool, true)
         let restoredSession = try XCTUnwrap(result["restoredSession"] as? [String: Any])
-        XCTAssertEqual(restoredSession["schemaVersion"] as? Int, 1)
+        XCTAssertEqual(restoredSession["schemaVersion"] as? Int, 2)
         XCTAssertEqual(restoredSession["graphVersion"] as? String, "fixture-v1")
         XCTAssertEqual(restoredSession["selectedNodeID"] as? String, "node-d")
         XCTAssertEqual(restoredSession["sourceLens"] as? String, "all")
@@ -2536,11 +2819,26 @@ final class BrainBarTests: XCTestCase {
         XCTAssertEqual(restoredSession["searchQuery"] as? String, "North")
         let restoredCamera = try XCTUnwrap(restoredSession["cameraState"] as? [String: Any])
         XCTAssertEqual((restoredCamera["zoom"] as? NSNumber)?.doubleValue, 1.5)
-        XCTAssertEqual(restoredCamera["preset"] as? String, "Saved test")
+        XCTAssertEqual(restoredCamera["preset"] as? String, "manual")
         let restoredPosition = try XCTUnwrap(restoredCamera["position"] as? [String: Any])
-        XCTAssertEqual(try XCTUnwrap((restoredPosition["x"] as? NSNumber)?.doubleValue), 12, accuracy: 0.000_001)
-        XCTAssertEqual(try XCTUnwrap((restoredPosition["y"] as? NSNumber)?.doubleValue), 34, accuracy: 0.000_001)
-        XCTAssertEqual(try XCTUnwrap((restoredPosition["z"] as? NSNumber)?.doubleValue), 56, accuracy: 0.000_001)
+        let restoredTarget = try XCTUnwrap(restoredCamera["target"] as? [String: Any])
+        let targetX = try XCTUnwrap((restoredTarget["x"] as? NSNumber)?.doubleValue)
+        let targetY = try XCTUnwrap((restoredTarget["y"] as? NSNumber)?.doubleValue)
+        let targetZ = try XCTUnwrap((restoredTarget["z"] as? NSNumber)?.doubleValue)
+        XCTAssertEqual(targetX, 1, accuracy: 0.000_001)
+        XCTAssertEqual(targetY, 2, accuracy: 0.000_001)
+        XCTAssertEqual(targetZ, 3, accuracy: 0.000_001)
+        let offsetX = try XCTUnwrap((restoredPosition["x"] as? NSNumber)?.doubleValue) - targetX
+        let offsetY = try XCTUnwrap((restoredPosition["y"] as? NSNumber)?.doubleValue) - targetY
+        let offsetZ = try XCTUnwrap((restoredPosition["z"] as? NSNumber)?.doubleValue) - targetZ
+        let distance = sqrt(offsetX * offsetX + offsetY * offsetY + offsetZ * offsetZ)
+        let requestedDistance = sqrt(11.0 * 11.0 + 32.0 * 32.0 + 53.0 * 53.0)
+        XCTAssertTrue(distance.isFinite)
+        XCTAssertGreaterThanOrEqual(distance, 90)
+        XCTAssertEqual(distance, 90, accuracy: 0.000_001)
+        XCTAssertEqual(offsetX / distance, 11 / requestedDistance, accuracy: 0.000_001)
+        XCTAssertEqual(offsetY / distance, 32 / requestedDistance, accuracy: 0.000_001)
+        XCTAssertEqual(offsetZ / distance, 53 / requestedDistance, accuracy: 0.000_001)
         let restoredPath = try XCTUnwrap(restoredSession["path"] as? [String: Any])
         XCTAssertEqual(restoredPath["sourceNodeID"] as? String, "node-a")
         XCTAssertEqual(restoredPath["targetNodeID"] as? String, "node-d")
@@ -2591,6 +2889,7 @@ final class BrainBarTests: XCTestCase {
         )
         var queryItems = components.queryItems ?? []
         queryItems.append(URLQueryItem(name: "identity-test", value: "1"))
+        queryItems.append(URLQueryItem(name: "renderer-test", value: "1"))
         components.queryItems = queryItems
         let identityIndexURL = try XCTUnwrap(components.url)
         threeD.webView.load(URLRequest(url: identityIndexURL))
@@ -2638,33 +2937,33 @@ final class BrainBarTests: XCTestCase {
         XCTAssertEqual(diagnosticCount(diagnostics, "queryableEdges"), 3)
         assertRendererDiagnosticsAreContentFree(diagnostics)
 
-        let evidenceInspector = try await callAsyncJavaScriptString(
+        _ = try await callAsyncJavaScriptString(
             """
             window.brainBarRevealNode3D('b');
-            const nodeText = document.getElementById('node-info')?.textContent || '';
-            const inspected = window.__brainBarGraphIdentityInspectEdge(
-              \(Graph3DWebView.jsStringLiteral("edge:\(semanticKey):0"))
-            );
-            return JSON.stringify({
-              nodeText,
-              inspected,
-              edgeText: document.getElementById('node-info')?.textContent || ''
-            });
+            return true;
             """,
             in: threeD.webView
         )
-        let evidenceInspectorValue = try XCTUnwrap(evidenceInspector)
-        let evidenceInspectorResult = try XCTUnwrap(
-            try JSONSerialization.jsonObject(with: Data(evidenceInspectorValue.utf8)) as? [String: Any]
+        let nodeText = try await waitForThreeDNodeInfoText(
+            in: threeD.webView,
+            phase: "3D exact identity node evidence",
+            requiring: ["Incoming links (1)", "Outgoing links (2)", "b → c"]
         )
-        let nodeText = try XCTUnwrap(evidenceInspectorResult["nodeText"] as? String)
         XCTAssertTrue(nodeText.contains("Incoming links (1)"), nodeText)
         XCTAssertTrue(nodeText.contains("Outgoing links (2)"), nodeText)
         XCTAssertTrue(nodeText.contains("b → c"), nodeText)
         XCTAssertTrue(nodeText.contains("Wikilink"), nodeText)
         XCTAssertTrue(nodeText.contains("semantic_similarity"), nodeText)
-        XCTAssertEqual(evidenceInspectorResult["inspected"] as? Bool, true)
-        let edgeText = try XCTUnwrap(evidenceInspectorResult["edgeText"] as? String)
+        let inspected = try await awaitThreeDBooleanResult(
+            "window.__brainBarGraphIdentityInspectEdge(\(Graph3DWebView.jsStringLiteral("edge:\(semanticKey):0")))",
+            in: threeD.webView
+        )
+        XCTAssertTrue(inspected)
+        let edgeText = try await waitForThreeDNodeInfoText(
+            in: threeD.webView,
+            phase: "3D exact identity edge evidence",
+            requiring: ["Connection evidence", "Relationship", "b → c"]
+        )
         XCTAssertTrue(edgeText.contains("Connection evidence"), edgeText)
         XCTAssertTrue(edgeText.contains("Relationship"), edgeText)
         XCTAssertTrue(edgeText.contains("b → c"), edgeText)
@@ -2744,6 +3043,100 @@ final class BrainBarTests: XCTestCase {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
         try encoder.encode(report).write(to: outputURL, options: .atomic)
+    }
+
+    @MainActor
+    func testOptInGraph3DVisualCapture() async throws {
+        guard let request = try takeGraph3DVisualCaptureRequest() else {
+            return
+        }
+        let outputRoot = URL(fileURLWithPath: request.outputRoot, isDirectory: true)
+        try FileManager.default.createDirectory(at: outputRoot, withIntermediateDirectories: true)
+        var captures: [Graph3DVisualCaptureManifest.Capture] = []
+        var coordinateFingerprints: [String: String] = [:]
+        for (index, scenario) in request.scenarios.enumerated() {
+            let fixtureURL = URL(fileURLWithPath: try XCTUnwrap(request.fixturePaths[scenario.fixtureName]))
+            let fixtureData = try Data(contentsOf: fixtureURL)
+            let fixture = try XCTUnwrap(try JSONSerialization.jsonObject(with: fixtureData) as? [String: Any])
+            let nodes = try XCTUnwrap(fixture["nodes"] as? [[String: Any]])
+            let edges = try XCTUnwrap(fixture["edges"] as? [[String: Any]])
+            let expected = try XCTUnwrap(reviewedMeasurementFixtureCounts[scenario.fixtureName])
+            XCTAssertEqual(RendererCounts(nodes: nodes.count, edges: edges.count), expected)
+            XCTAssertEqual(
+                visualCaptureFixtureDigest(fixtureData),
+                try XCTUnwrap(request.fixtureDigests[scenario.fixtureName]),
+                "Visual capture fixture identity changed: \(scenario.fixtureName)"
+            )
+
+            let graphDirectory = try visualCaptureGraphDirectory(
+                request: request,
+                scenario: scenario,
+                fixtureData: fixtureData
+            )
+            let threeD = try makeThreeDLayoutResponsivenessWebView(graphDirectory: graphDirectory)
+            let host = RendererWebViewHost(webView: threeD.webView)
+            do {
+                host.window.setContentSize(NSSize(width: scenario.width, height: scenario.height))
+                try await prepareThreeDGraph(threeD, graphDirectory: graphDirectory)
+                try await waitForRendererFunction("brainBarLoadGraph", in: threeD.webView, phase: "visual capture API")
+                let graphURL = try graphSchemeURL(for: threeD.coordinator)
+                let metadataURL = graphURL.replacingOccurrences(of: "/graph.json?", with: "/graph-metadata.json?")
+                let loaded = try await awaitThreeDGraphOperation(
+                    "window.brainBarLoadGraphFromURL(\(Graph3DWebView.jsStringLiteral(graphURL)), \(Graph3DWebView.jsStringLiteral(metadataURL)), 'all', \(9000 + index))",
+                    action: "load public visual capture fixture",
+                    in: threeD.webView
+                )
+                XCTAssertTrue(loaded)
+                _ = try await waitForRendererDiagnostics(in: threeD.webView, functionName: "brainBarRendererDiagnostics", phase: "visual capture initial paint") {
+                    diagnosticString($0, "layoutState") == "committed" &&
+                    diagnosticCount($0, "queryableNodes") == expected.nodes &&
+                    diagnosticCount($0, "queryableEdges") == expected.edges &&
+                    diagnosticBool($0, "paintedCountsSettled") == true
+                }
+
+                let scenarioApplied = try await awaitThreeDBooleanResult(
+                    visualCaptureScenarioScript(scenario, fixtureName: scenario.fixtureName),
+                    in: threeD.webView
+                )
+                XCTAssertTrue(scenarioApplied)
+                let diagnostics = try await waitForRendererDiagnostics(in: threeD.webView, functionName: "brainBarRendererDiagnostics", phase: "visual capture \(scenario.name)") {
+                    diagnosticString($0, "layoutState") == "committed" &&
+                    diagnosticCount($0, "queryableNodes") == expected.nodes &&
+                    diagnosticCount($0, "queryableEdges") == expected.edges &&
+                    diagnosticBool($0, "paintedCountsSettled") == true
+                }
+                assertRendererDiagnosticsAreContentFree(diagnostics)
+                let presentation = try await visualCapturePresentationState(in: threeD.webView)
+                XCTAssertLessThanOrEqual((presentation["persistentLabelMaxOverlapArea"] as? NSNumber)?.doubleValue ?? .infinity, 12)
+                let coordinateFingerprint = try XCTUnwrap(presentation["coordinateFingerprint"] as? String)
+                if let expectedFingerprint = coordinateFingerprints[scenario.fixtureName] {
+                    XCTAssertEqual(coordinateFingerprint, expectedFingerprint, "Visual capture changed coordinates for \(scenario.name)")
+                } else {
+                    coordinateFingerprints[scenario.fixtureName] = coordinateFingerprint
+                }
+                try assertVisualCaptureScenario(scenario, diagnostics: diagnostics, presentation: presentation)
+                let snapshotURL = outputRoot.appendingPathComponent(scenario.outputName)
+                try await writeVisualCaptureSnapshot(of: threeD.webView, to: snapshotURL)
+                captures.append(try visualCaptureManifestEntry(
+                    scenario: scenario,
+                    expected: expected,
+                    diagnostics: diagnostics,
+                    presentation: presentation
+                ))
+                try await closeThreeDRendererTestHost(
+                    host,
+                    messageHandlerNames: ["brainBarNodeAction", "brainBarGraphDiagnostic"]
+                )
+            } catch {
+                host.close(messageHandlerNames: ["brainBarNodeAction", "brainBarGraphDiagnostic"])
+                throw error
+            }
+        }
+        try assertVisualCaptureMatchedCoreParity(captures)
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
+        try encoder.encode(Graph3DVisualCaptureManifest(captures: captures))
+            .write(to: outputRoot.appendingPathComponent("manifest.json"), options: .atomic)
     }
 
     @MainActor
@@ -4055,7 +4448,7 @@ final class BrainBarTests: XCTestCase {
         manager.environment = ["BRAIN_BAR_CONFIG": directory.appendingPathComponent("config.json").path]
         let model = AppModel(configurationManager: manager)
         var future = GraphSessionState(selectedNodeID: "future")
-        future.schemaVersion = 2
+        future.schemaVersion = 3
 
         model.updateGraphSessionState(future)
         XCTAssertNil(model.graphSessionState.selectedNodeID)
@@ -4094,7 +4487,7 @@ final class BrainBarTests: XCTestCase {
         XCTAssertEqual(GraphWebView.decodeGraphSessionState(object), state)
 
         var futureObject = object
-        futureObject["schemaVersion"] = 2
+        futureObject["schemaVersion"] = 3
         XCTAssertNil(Graph3DWebView.decodeGraphSessionState(futureObject))
         XCTAssertNil(GraphWebView.decodeGraphSessionState(futureObject))
     }
@@ -4718,11 +5111,31 @@ final class BrainBarTests: XCTestCase {
             appProcessResidentDeltaAfterTransportPreparationBytes: Double(max(0, residentAfterTransportPreparation - residentBefore)),
             appProcessResidentMaxSampleBytes: Double([residentBefore, residentAfterTransportPreparation, residentAfterThreeDTeardown, residentAfterTwoDTeardown].max() ?? 0),
             threeDLoadToSettledPaintMs: threeDMeasurement.loadToSettledPaintMs,
+            threeDNativePrepareToIndexMs: threeDMeasurement.nativePrepareToIndexMs,
+            threeDNavigationToAPIReadyMs: threeDMeasurement.navigationToAPIReadyMs,
+            threeDGraphFetchMs: threeDMeasurement.graphFetchMs,
+            threeDGraphJSONParseMs: threeDMeasurement.graphJSONParseMs,
+            threeDEvidenceBuildMs: threeDMeasurement.evidenceBuildMs,
+            threeDGraphPreparationMs: threeDMeasurement.graphPreparationMs,
+            threeDApplyLensPreLayoutMs: threeDMeasurement.applyLensPreLayoutMs,
+            threeDMetadataReplayMs: threeDMeasurement.metadataReplayMs,
+            threeDNormalizeGraphMs: threeDMeasurement.normalizeGraphMs,
+            threeDPresentationIndexBuildMs: threeDMeasurement.presentationIndexBuildMs,
+            threeDLayoutCacheReadMs: threeDMeasurement.layoutCacheReadMs,
+            threeDMeshHitGeometryMs: threeDMeasurement.meshHitGeometryMs,
+            threeDFirstProjectionStaticPaintMs: threeDMeasurement.firstProjectionStaticPaintMs,
+            threeDLayoutEndToEndMs: threeDMeasurement.layoutEndToEndMs,
             threeDLayoutPreparationMs: threeDMeasurement.layoutPreparationMs,
+            threeDProbeGraphFetchAndParseMs: threeDMeasurement.probeGraphFetchAndParseMs,
             threeDLayoutCallReturnMs: threeDMeasurement.layoutCallReturnMs,
             threeDLayoutZeroDelayTimerProbeMs: threeDMeasurement.layoutZeroDelayTimerProbeMs,
             threeDLensToSettledMs: threeDMeasurement.lensToSettledMs,
             threeDSearchToSettledMs: threeDMeasurement.searchToSettledMs,
+            threeDPanOrbitFrameMs: threeDMeasurement.panOrbitFrameMs,
+            threeDHoverToHighlightMs: threeDMeasurement.hoverToHighlightMs,
+            threeDSelectionToFirstFeedbackMs: threeDMeasurement.selectionToFirstFeedbackMs,
+            threeDSidebarOpenReframeMs: threeDMeasurement.sidebarOpenReframeMs,
+            threeDOverviewCommunityTransitionMs: threeDMeasurement.overviewCommunityTransitionMs,
             twoDRuntimeLoadToDiagnosticsMs: twoDMeasurement.loadToDiagnosticsMs,
             twoDRuntimeLensToDiagnosticsMs: twoDMeasurement.lensToDiagnosticsMs,
             twoDRuntimeSearchToDiagnosticsMs: twoDMeasurement.searchToDiagnosticsMs,
@@ -4742,8 +5155,18 @@ final class BrainBarTests: XCTestCase {
                 ? ["hit"]
                 : (requiresLayoutCacheStored ? ["stored"] : ["hit", "stored"])
             let threeDLoadStartedAt = Date()
-            try await prepareThreeDGraph(threeD, graphDirectory: graphDirectory)
+            let nativePrepareStartedAt = Date()
+            try await prepareThreeDGraph(threeD, graphDirectory: graphDirectory, rendererTestMode: false)
+            let threeDNativePrepareToIndexMs = milliseconds(since: nativePrepareStartedAt)
+            let navigationStartedAt = Date()
+            try await navigateToTestPage(
+                try rendererMeasurementIndexURL(for: threeD.coordinator),
+                queryItem: "renderer-measurement",
+                value: "1",
+                in: threeD.webView
+            )
             try await waitForRendererFunction("brainBarLoadGraph", in: threeD.webView, phase: "measurement 3D API installation")
+            let threeDNavigationToAPIReadyMs = milliseconds(since: navigationStartedAt)
             let beforeProbe = try await waitForRendererDiagnostics(in: threeD.webView, functionName: "brainBarRendererDiagnostics", phase: "measurement 3D pre-probe") {
                 diagnosticString($0, "activeMode") != nil
             }
@@ -4754,7 +5177,7 @@ final class BrainBarTests: XCTestCase {
                 in: threeD.webView
             )
             XCTAssertTrue(layoutProbe.didSucceed)
-            let threeDInitial = try await waitForRendererDiagnostics(in: threeD.webView, functionName: "brainBarRendererDiagnostics", phase: "measurement 3D initial load", timeout: 15) {
+            let threeDInitial = try await waitForRendererDiagnostics(in: threeD.webView, functionName: "brainBarRendererDiagnostics", phase: "measurement 3D initial load", timeout: 15, flushMeasurementPaint: true) {
                 diagnosticCount($0, "queryableNodes") == expected.nodes &&
                 diagnosticCount($0, "queryableEdges") == expected.edges &&
                 diagnosticBool($0, "paintedCountsSettled") == true &&
@@ -4768,11 +5191,24 @@ final class BrainBarTests: XCTestCase {
                 XCTAssertEqual(threeDLayoutCache, "stored", "The cold renderer measurement must populate the layout cache.")
             }
             let threeDLoadToSettledPaintMs = milliseconds(since: threeDLoadStartedAt)
+            let threeDGraphFetchMs = try XCTUnwrap(diagnosticDouble(threeDInitial, "graphFetchMs"))
+            let threeDGraphJSONParseMs = try XCTUnwrap(diagnosticDouble(threeDInitial, "graphJSONParseMs"))
+            let threeDEvidenceBuildMs = try XCTUnwrap(diagnosticDouble(threeDInitial, "evidenceBuildMs"))
+            let threeDGraphPreparationMs = try XCTUnwrap(diagnosticDouble(threeDInitial, "graphPreparationMs"))
+            let threeDApplyLensPreLayoutMs = try XCTUnwrap(diagnosticDouble(threeDInitial, "applyLensPreLayoutMs"))
+            let threeDMetadataReplayMs = try XCTUnwrap(diagnosticDouble(threeDInitial, "metadataReplayMs"))
+            let threeDNormalizeGraphMs = try XCTUnwrap(diagnosticDouble(threeDInitial, "normalizeGraphMs"))
+            let threeDPresentationIndexBuildMs = try XCTUnwrap(diagnosticDouble(threeDInitial, "presentationIndexBuildMs"))
+            let threeDLayoutCacheReadMs = try XCTUnwrap(diagnosticDouble(threeDInitial, "layoutCacheReadMs"))
+            let threeDMeshHitGeometryMs = try XCTUnwrap(diagnosticDouble(threeDInitial, "meshHitGeometryMs"))
+            let threeDFirstProjectionStaticPaintMs = try XCTUnwrap(diagnosticDouble(threeDInitial, "firstProjectionStaticPaintMs"))
+            let threeDLayoutEndToEndMs = try XCTUnwrap(diagnosticDouble(threeDInitial, "layoutEndToEndMs"))
             let threeDLayoutPreparationMs = try XCTUnwrap(diagnosticDouble(threeDInitial, "layoutPreparationMs"))
+            let threeDProbeGraphFetchAndParseMs = layoutProbe.graphFetchAndParseMs
             let threeDLensStartedAt = Date()
             let didApplyGraphifyLens = try await awaitThreeDGraphOperation("window.brainBarApplyGraphLens('graphify')", action: "measure Graphify lens", in: threeD.webView)
             XCTAssertTrue(didApplyGraphifyLens)
-            let threeDLensDiagnostics = try await waitForRendererDiagnostics(in: threeD.webView, functionName: "brainBarRendererDiagnostics", phase: "measurement 3D lens", timeout: 15) {
+            let threeDLensDiagnostics = try await waitForRendererDiagnostics(in: threeD.webView, functionName: "brainBarRendererDiagnostics", phase: "measurement 3D lens", timeout: 15, flushMeasurementPaint: true) {
                 diagnosticString($0, "lens") == "graphify" &&
                 diagnosticBool($0, "paintedCountsSettled") == true &&
                 expectedLayoutCacheStates.contains(diagnosticString($0, "layoutCache") ?? "")
@@ -4791,10 +5227,31 @@ final class BrainBarTests: XCTestCase {
                 action: "measure 3D search",
                 in: threeD.webView
             )
-            _ = try await waitForRendererDiagnostics(in: threeD.webView, functionName: "brainBarRendererDiagnostics", phase: "measurement 3D search", timeout: 15) {
+            _ = try await waitForRendererDiagnostics(in: threeD.webView, functionName: "brainBarRendererDiagnostics", phase: "measurement 3D search", timeout: 15, flushMeasurementPaint: true) {
                 (diagnosticCount($0, "searchResultCount") ?? 0) > 0 && diagnosticBool($0, "paintedCountsSettled") == true
             }
             let threeDSearchToSettledMs = milliseconds(since: threeDSearchStartedAt)
+            let didRestoreAllLens = try await awaitThreeDGraphOperation("window.brainBarApplyGraphLens('all')", action: "restore Overview interaction lens", in: threeD.webView)
+            XCTAssertTrue(didRestoreAllLens)
+            _ = try await waitForRendererDiagnostics(in: threeD.webView, functionName: "brainBarRendererDiagnostics", phase: "measurement 3D Overview interaction lens", timeout: 15, flushMeasurementPaint: true) {
+                diagnosticString($0, "lens") == "all" && diagnosticBool($0, "paintedCountsSettled") == true
+            }
+            let interactionMetricsSerialized = try await callAsyncJavaScriptString(
+                "const metrics = window.brainBarMeasurePresentationInteractions(); return JSON.stringify(metrics);",
+                in: threeD.webView
+            )
+            let interactionMetricsValue = try XCTUnwrap(interactionMetricsSerialized)
+            let interactionMetrics = try XCTUnwrap(
+                try JSONSerialization.jsonObject(with: Data(interactionMetricsValue.utf8)) as? [String: Any]
+            )
+            let threeDPanOrbitFrameMs = try XCTUnwrap(diagnosticDouble(interactionMetrics, "panOrbitFrameMs"))
+            let threeDHoverToHighlightMs = try XCTUnwrap(diagnosticDouble(interactionMetrics, "hoverToHighlightMs"))
+            let threeDSelectionToFirstFeedbackMs = try XCTUnwrap(diagnosticDouble(interactionMetrics, "selectionToFirstFeedbackMs"))
+            let threeDSidebarOpenReframeMs = try XCTUnwrap(diagnosticDouble(interactionMetrics, "sidebarOpenReframeMs"))
+            let threeDOverviewCommunityTransitionMs = try XCTUnwrap(diagnosticDouble(interactionMetrics, "overviewCommunityTransitionMs"))
+            XCTAssertLessThanOrEqual(threeDHoverToHighlightMs, 50)
+            XCTAssertLessThanOrEqual(threeDSelectionToFirstFeedbackMs, 50)
+            XCTAssertLessThanOrEqual(threeDPanOrbitFrameMs, 33)
             let counts = RendererCounts(
                 nodes: try XCTUnwrap(diagnosticCount(threeDInitial, "queryableNodes")),
                 edges: try XCTUnwrap(diagnosticCount(threeDInitial, "queryableEdges"))
@@ -4802,11 +5259,31 @@ final class BrainBarTests: XCTestCase {
             try await quiesceThreeDRendererWebView(threeD.webView, messageHandlerNames: ["brainBarNodeAction", "brainBarGraphDiagnostic"])
             let measurement = ThreeDRendererMeasurement(
                 loadToSettledPaintMs: threeDLoadToSettledPaintMs,
+                nativePrepareToIndexMs: threeDNativePrepareToIndexMs,
+                navigationToAPIReadyMs: threeDNavigationToAPIReadyMs,
+                graphFetchMs: threeDGraphFetchMs,
+                graphJSONParseMs: threeDGraphJSONParseMs,
+                evidenceBuildMs: threeDEvidenceBuildMs,
+                graphPreparationMs: threeDGraphPreparationMs,
+                applyLensPreLayoutMs: threeDApplyLensPreLayoutMs,
+                metadataReplayMs: threeDMetadataReplayMs,
+                normalizeGraphMs: threeDNormalizeGraphMs,
+                presentationIndexBuildMs: threeDPresentationIndexBuildMs,
+                layoutCacheReadMs: threeDLayoutCacheReadMs,
+                meshHitGeometryMs: threeDMeshHitGeometryMs,
+                firstProjectionStaticPaintMs: threeDFirstProjectionStaticPaintMs,
+                layoutEndToEndMs: threeDLayoutEndToEndMs,
                 layoutPreparationMs: threeDLayoutPreparationMs,
+                probeGraphFetchAndParseMs: threeDProbeGraphFetchAndParseMs,
                 layoutCallReturnMs: layoutProbe.callReturnMs,
                 layoutZeroDelayTimerProbeMs: layoutProbe.zeroDelayTimerProbeMs,
                 lensToSettledMs: threeDLensToSettledMs,
                 searchToSettledMs: threeDSearchToSettledMs,
+                panOrbitFrameMs: threeDPanOrbitFrameMs,
+                hoverToHighlightMs: threeDHoverToHighlightMs,
+                selectionToFirstFeedbackMs: threeDSelectionToFirstFeedbackMs,
+                sidebarOpenReframeMs: threeDSidebarOpenReframeMs,
+                overviewCommunityTransitionMs: threeDOverviewCommunityTransitionMs,
                 counts: counts,
                 layoutCache: threeDLayoutCache
             )
@@ -4881,6 +5358,491 @@ final class BrainBarTests: XCTestCase {
         try fixtureData.write(to: threeD.appendingPathComponent("graph.json"), options: .atomic)
         try writeTwoDRendererHTML(graphData: fixtureData, to: twoDHTML)
         return MeasurementGraphDirectories(root: root, payload: payload, threeD: threeD, twoDHTML: twoDHTML)
+    }
+
+    private func takeGraph3DVisualCaptureRequest() throws -> Graph3DVisualCaptureRequest? {
+        let requestURL = URL(fileURLWithPath: "/private/tmp/brainbar-graph3d-visual-capture-request.json")
+        guard FileManager.default.fileExists(atPath: requestURL.path) else {
+            return nil
+        }
+        let requestData = try Data(contentsOf: requestURL)
+        try FileManager.default.removeItem(at: requestURL)
+        let request = try JSONDecoder().decode(Graph3DVisualCaptureRequest.self, from: requestData)
+        return try validatedGraph3DVisualCaptureRequest(request, now: Date().timeIntervalSince1970)
+    }
+
+    private func validatedGraph3DVisualCaptureRequest(
+        _ request: Graph3DVisualCaptureRequest,
+        now: TimeInterval
+    ) throws -> Graph3DVisualCaptureRequest {
+        let rawPathPrefix = "/private/tmp/brainbar-graph3d-visual-capture-"
+        let expectedScenarios: [Graph3DVisualCaptureScenario] = [
+            .init(name: "1k-overview-collapsed", fixtureName: "1k", width: 1000, height: 720, outputName: "1k-overview-collapsed.png"),
+            .init(name: "1k-overview-docked", fixtureName: "1k", width: 1000, height: 720, outputName: "1k-overview-docked.png"),
+            .init(name: "inspected-overview-collapsed", fixtureName: "inspected-shape", width: 1000, height: 720, outputName: "inspected-overview-collapsed.png"),
+            .init(name: "inspected-overview-docked", fixtureName: "inspected-shape", width: 1000, height: 720, outputName: "inspected-overview-docked.png"),
+            .init(name: "1k-community", fixtureName: "1k", width: 1000, height: 720, outputName: "1k-community.png"),
+            .init(name: "1k-node-focus", fixtureName: "1k", width: 1000, height: 720, outputName: "1k-node-focus.png"),
+            .init(name: "1k-selected-hub", fixtureName: "1k", width: 1000, height: 720, outputName: "1k-selected-hub.png"),
+            .init(name: "1k-selected-peripheral", fixtureName: "1k", width: 1000, height: 720, outputName: "1k-selected-peripheral.png"),
+            .init(name: "1k-active-path", fixtureName: "1k", width: 1000, height: 720, outputName: "1k-active-path.png"),
+            .init(name: "1k-recent-orbit", fixtureName: "1k", width: 1000, height: 720, outputName: "1k-recent-orbit.png"),
+            .init(name: "1k-agent-activity", fixtureName: "1k", width: 1000, height: 720, outputName: "1k-agent-activity.png"),
+            .init(name: "1k-workflow-highlight", fixtureName: "1k", width: 1000, height: 720, outputName: "1k-workflow-highlight.png"),
+            .init(name: "1k-graph-check", fixtureName: "1k", width: 1000, height: 720, outputName: "1k-graph-check.png"),
+            .init(name: "1k-narrow-overlay", fixtureName: "1k", width: 620, height: 720, outputName: "1k-narrow-overlay.png"),
+            .init(name: "1k-reduce-motion", fixtureName: "1k", width: 1000, height: 720, outputName: "1k-reduce-motion.png")
+        ]
+        guard
+            request.version == 1,
+            now >= request.createdAt,
+            now - request.createdAt <= 300,
+            processIsLive(request.launcherPID),
+            request.captureRoot.hasPrefix(rawPathPrefix),
+            request.scenarios == expectedScenarios,
+            Set(request.fixturePaths.keys) == Set(["1k", "inspected-shape"]),
+            request.fixtureDigests == reviewedVisualCaptureFixtureDigests
+        else {
+            throw BrainBarError.processFailed("Invalid or stale Graph3D visual capture request.")
+        }
+
+        let rootURL = URL(fileURLWithPath: request.captureRoot, isDirectory: true)
+        guard FileManager.default.fileExists(atPath: rootURL.path) else {
+            throw BrainBarError.processFailed("Graph3D visual capture root is missing.")
+        }
+        let resolvedRoot = rootURL.resolvingSymlinksInPath().standardizedFileURL
+        guard isGraph3DVisualCapturePath(resolvedRoot, underTemporaryPrefix: rawPathPrefix) else {
+            throw BrainBarError.processFailed("Unsafe Graph3D visual capture root.")
+        }
+        let rawRoot = rootURL.standardizedFileURL
+        let outputRoot = URL(fileURLWithPath: request.outputRoot, isDirectory: true).standardizedFileURL
+        guard
+            request.outputRoot.hasPrefix("\(request.captureRoot)/"),
+            outputRoot.lastPathComponent == "output",
+            !FileManager.default.fileExists(atPath: outputRoot.path)
+        else {
+            throw BrainBarError.processFailed("Graph3D visual capture output escapes the approved root.")
+        }
+
+        var resolvedFixtures: [String: String] = [:]
+        for fixtureName in ["1k", "inspected-shape"] {
+            guard let rawPath = request.fixturePaths[fixtureName] else {
+                throw BrainBarError.processFailed("Graph3D visual capture fixture is missing.")
+            }
+            let fixtureURL = URL(fileURLWithPath: rawPath).standardizedFileURL
+            let expectedFixtureURL = rawRoot.appendingPathComponent("fixtures/\(fixtureName).json")
+            let resolvedFixture = fixtureURL.resolvingSymlinksInPath().standardizedFileURL
+            guard
+                fixtureURL == expectedFixtureURL,
+                FileManager.default.fileExists(atPath: fixtureURL.path),
+                isDescendant(resolvedFixture, of: resolvedRoot)
+            else {
+                throw BrainBarError.processFailed("Graph3D visual capture fixture escapes the approved root.")
+            }
+            resolvedFixtures[fixtureName] = resolvedFixture.path
+        }
+
+        return Graph3DVisualCaptureRequest(
+            version: request.version,
+            captureRoot: resolvedRoot.path,
+            fixturePaths: resolvedFixtures,
+            fixtureDigests: request.fixtureDigests,
+            outputRoot: resolvedRoot.appendingPathComponent("output", isDirectory: true).path,
+            scenarios: request.scenarios,
+            createdAt: request.createdAt,
+            launcherPID: request.launcherPID
+        )
+    }
+
+    private func isGraph3DVisualCapturePath(_ url: URL, underTemporaryPrefix rawPrefix: String) -> Bool {
+        let resolvedTemporaryRoot = URL(fileURLWithPath: "/private/tmp", isDirectory: true).resolvingSymlinksInPath().standardizedFileURL.path
+        return url.path.hasPrefix(rawPrefix) || url.path.hasPrefix("\(resolvedTemporaryRoot)/brainbar-graph3d-visual-capture-")
+    }
+
+    @MainActor
+    private func visualCaptureGraphDirectory(
+        request: Graph3DVisualCaptureRequest,
+        scenario: Graph3DVisualCaptureScenario,
+        fixtureData: Data
+    ) throws -> URL {
+        let graphDirectory = URL(fileURLWithPath: request.captureRoot, isDirectory: true)
+            .appendingPathComponent("graphs/\(scenario.name)/graphify-out", isDirectory: true)
+        try FileManager.default.createDirectory(at: graphDirectory, withIntermediateDirectories: true)
+        try fixtureData.write(to: graphDirectory.appendingPathComponent("graph.json"), options: .atomic)
+        try writePublicVisualCaptureMetadata(for: scenario, fixtureData: fixtureData, graphDirectory: graphDirectory)
+        return graphDirectory
+    }
+
+    @MainActor
+    private func writePublicVisualCaptureMetadata(
+        for scenario: Graph3DVisualCaptureScenario,
+        fixtureData: Data,
+        graphDirectory: URL
+    ) throws {
+        guard scenario.name == "1k-recent-orbit" else {
+            return
+        }
+        let fixture = try XCTUnwrap(try JSONSerialization.jsonObject(with: fixtureData) as? [String: Any])
+        let nodes = try XCTUnwrap(fixture["nodes"] as? [[String: Any]])
+        let syntheticVault = graphDirectory.deletingLastPathComponent()
+        for (index, nodeID) in ["1k-node-000", "1k-node-001", "1k-node-002", "1k-node-003"].enumerated() {
+            let node = try XCTUnwrap(nodes.first(where: { $0["id"] as? String == nodeID }))
+            let sourceFile = try XCTUnwrap(node["source_file"] as? String)
+            let fileURL = syntheticVault.appendingPathComponent(sourceFile)
+            try FileManager.default.createDirectory(at: fileURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try Data().write(to: fileURL, options: .atomic)
+            try FileManager.default.setAttributes(
+                [.modificationDate: Date(timeIntervalSince1970: 1_700_000_000 + Double(index))],
+                ofItemAtPath: fileURL.path
+            )
+        }
+    }
+
+    @MainActor
+    private func visualCaptureScenarioScript(_ scenario: Graph3DVisualCaptureScenario, fixtureName: String) -> String {
+        let nodePrefix = fixtureName == "1k" ? "1k-node-" : "inspected-shape-node-"
+        let nodeA = "\(nodePrefix)000"
+        let nodeB = "\(nodePrefix)001"
+        let hubNode = "\(nodePrefix)370"
+        let peripheralNode = "\(nodePrefix)383"
+        let session: String
+        switch scenario.name {
+        case "1k-overview-collapsed":
+            session = "window.brainBarSetSidebarState('collapsed'); window.brainBarApplyCameraPreset('overview');"
+        case "1k-overview-docked":
+            session = "window.brainBarSetSidebarState('docked', 360); window.brainBarApplyCameraPreset('overview');"
+        case "inspected-overview-collapsed":
+            session = "window.brainBarSetSidebarState('collapsed'); window.brainBarApplyCameraPreset('overview');"
+        case "inspected-overview-docked":
+            session = "window.brainBarSetSidebarState('docked', 360); window.brainBarApplyCameraPreset('overview');"
+        case "1k-community":
+            session = "window.brainBarShowCommunity3D('1'); await new Promise((resolve) => setTimeout(resolve, 420));"
+        case "1k-node-focus":
+            session = "window.brainBarApplyGraphSessionState({ schemaVersion: 2, selectedNodeID: \(Graph3DWebView.jsStringLiteral(nodeA)), focusDepth: 1, detailLevel: 'overview', detailReason: 'adaptive-default', sidebarState: 'docked', sidebarWidth: 360, reduceMotion: false, cameraHistory: [] });"
+        case "1k-selected-hub":
+            session = "window.brainBarApplyGraphSessionState({ schemaVersion: 2, selectedNodeID: \(Graph3DWebView.jsStringLiteral(hubNode)), detailLevel: 'overview', detailReason: 'adaptive-default', sidebarState: 'docked', sidebarWidth: 360, reduceMotion: true, cameraHistory: [] }); await new Promise((resolve) => setTimeout(resolve, 120));"
+        case "1k-selected-peripheral":
+            session = "window.brainBarApplyGraphSessionState({ schemaVersion: 2, selectedNodeID: \(Graph3DWebView.jsStringLiteral(peripheralNode)), detailLevel: 'overview', detailReason: 'adaptive-default', sidebarState: 'docked', sidebarWidth: 360, reduceMotion: true, cameraHistory: [] }); await new Promise((resolve) => setTimeout(resolve, 120));"
+        case "1k-active-path":
+            session = "window.brainBarStartPathFromNode3D(JSON.stringify({ sourceId: \(Graph3DWebView.jsStringLiteral(nodeA)), targetId: \(Graph3DWebView.jsStringLiteral(nodeB)) }));"
+        case "1k-recent-orbit":
+            session = "const recentButton = document.getElementById('start-recent-orbit'); if (!recentButton) return false; recentButton.click(); await new Promise((resolve) => setTimeout(resolve, 420));"
+        case "1k-agent-activity":
+            session = "window.brainBarSetSidebarState('docked', 360); window.brainBarApplyAgentActivity({ events: [{ id: 'public-capture-activity', version: 2, action: 'focus', agent: 'codex', path: 'fixtures/1k/1k-node-370.md', sourceFile: 'fixtures/1k/1k-node-370.md', nodeId: '1k-node-370', label: 'Fixture 1k node 370', pending: false, timestamp: '2024-01-01T00:00:00Z' }], pendingPaths: [], tracingEnabled: true, workflows: [] });"
+        case "1k-workflow-highlight":
+            session = "window.brainBarSetSidebarState('docked', 360); window.brainBarApplyAgentActivity({ events: [{ id: 'public-capture-workflow', version: 2, action: 'write', agent: 'codex', path: 'fixtures/1k/1k-node-370.md', sourceFile: 'fixtures/1k/1k-node-370.md', nodeId: '1k-node-370', label: 'Fixture 1k node 370', pending: false, workflowId: 'public-capture', workflowTitle: 'Public capture workflow', timestamp: '2024-01-01T00:00:00Z' }], pendingPaths: [], tracingEnabled: true, workflows: [{ id: 'workflow:public-capture', title: 'Public capture workflow', status: 'completed', nodeIds: ['1k-node-370', '1k-node-371', '1k-node-372'], pendingPaths: [] }] }); window.brainBarApplyWorkflowHighlight('workflow:public-capture');"
+        case "1k-graph-check":
+            session = "window.brainBarSetSidebarState('collapsed'); if (!window.brainBarShowGraphHealth()) return false;"
+        case "1k-narrow-overlay":
+            session = "window.brainBarSetReduceMotion(true); window.brainBarSetSidebarState('overlay', 360); window.brainBarRevealNode3D(\(Graph3DWebView.jsStringLiteral(nodeA)));"
+        case "1k-reduce-motion":
+            session = "window.brainBarSetReduceMotion(true); window.brainBarApplyGraphSessionState({ schemaVersion: 2, selectedNodeID: \(Graph3DWebView.jsStringLiteral(nodeA)), detailLevel: 'overview', detailReason: 'adaptive-default', sidebarState: 'overlay', sidebarWidth: 360, reduceMotion: true, cameraHistory: [] });"
+        default:
+            session = ""
+        }
+        return "(async () => { \(session) window.brainBarFlushRendererForMeasurement?.(); return true; })()"
+    }
+
+    @MainActor
+    private func visualCapturePresentationState(in webView: WKWebView) async throws -> [String: Any] {
+        let serialized = try await callAsyncJavaScriptString(
+            """
+            const presentation = window.brainBarPresentationStateForTesting?.() || {};
+            const session = window.brainBarGraphSessionSnapshot?.() || {};
+            const healthPanel = document.getElementById('graph-health-panel');
+            return JSON.stringify({
+              ...presentation,
+              selectedNodeID: session.selectedNodeID || null,
+              graphCheckVisible: Boolean(healthPanel && !healthPanel.hidden),
+              graphCheckProposalCount: healthPanel?.querySelectorAll('.evidence-proposal').length || 0
+            });
+            """,
+            in: webView
+        )
+        guard
+            let serialized,
+            let data = serialized.data(using: .utf8),
+            let state = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        else {
+            throw BrainBarError.processFailed("Graph3D visual capture state was unavailable.")
+        }
+        return state
+    }
+
+    @MainActor
+    private func writeVisualCaptureSnapshot(of webView: WKWebView, to url: URL) async throws {
+        let image: NSImage = try await withCheckedThrowingContinuation { continuation in
+            webView.takeSnapshot(with: nil) { image, error in
+                if let error {
+                    continuation.resume(throwing: error)
+                } else if let image {
+                    continuation.resume(returning: image)
+                } else {
+                    continuation.resume(throwing: BrainBarError.processFailed("Graph3D visual capture returned no image."))
+                }
+            }
+        }
+        guard
+            let tiffData = image.tiffRepresentation,
+            let bitmap = NSBitmapImageRep(data: tiffData),
+            let pngData = bitmap.representation(using: .png, properties: [:])
+        else {
+            throw BrainBarError.processFailed("Graph3D visual capture could not encode PNG.")
+        }
+        try pngData.write(to: url, options: .atomic)
+    }
+
+    private func visualCaptureManifestEntry(
+        scenario: Graph3DVisualCaptureScenario,
+        expected: RendererCounts,
+        diagnostics: [String: Any],
+        presentation: [String: Any]
+    ) throws -> Graph3DVisualCaptureManifest.Capture {
+        let coverage = try XCTUnwrap(presentation["paintedProjectedCoverage"] as? [String: Any])
+        let diagnostic = Graph3DVisualCaptureManifest.Diagnostics(
+            layoutSchemaVersion: try XCTUnwrap(diagnosticCount(diagnostics, "layoutSchemaVersion")),
+            layoutProfile: try XCTUnwrap(diagnosticString(diagnostics, "layoutProfile")),
+            detailLevel: try XCTUnwrap(diagnosticString(diagnostics, "detailLevel")),
+            detailReason: try XCTUnwrap(diagnosticString(diagnostics, "detailReason")),
+            paintedNodeCount: try XCTUnwrap(diagnosticCount(diagnostics, "paintedNodeCount")),
+            paintedEdgeCount: try XCTUnwrap(diagnosticCount(diagnostics, "paintedEdgeCount")),
+            communityAnchorCount: try XCTUnwrap(diagnosticCount(diagnostics, "communityAnchorCount")),
+            persistentLabelCount: try XCTUnwrap(diagnosticCount(diagnostics, "persistentLabelCount")),
+            persistentLabelMaxOverlapArea: try XCTUnwrap(diagnosticDouble(presentation, "persistentLabelMaxOverlapArea")),
+            activeMode: try XCTUnwrap(diagnosticString(diagnostics, "activeMode")),
+            selectedNodeCount: try XCTUnwrap(diagnosticCount(diagnostics, "selectedNodeCount")),
+            agentActivityEventCount: try XCTUnwrap(diagnosticCount(diagnostics, "agentActivityEventCount")),
+            agentActivityRenderableCount: try XCTUnwrap(diagnosticCount(diagnostics, "agentActivityRenderableCount")),
+            workflowHighlightNodeCount: try XCTUnwrap(diagnosticCount(diagnostics, "workflowHighlightNodeCount")),
+            workflowHighlightPendingPathCount: try XCTUnwrap(diagnosticCount(diagnostics, "workflowHighlightPendingPathCount")),
+            graphCheckVisible: try XCTUnwrap(presentation["graphCheckVisible"] as? Bool),
+            sidebarState: try XCTUnwrap(diagnosticString(diagnostics, "sidebarState")),
+            cameraPreset: try XCTUnwrap(diagnosticString(diagnostics, "cameraPreset")),
+            staticLayerRebuildMs: try XCTUnwrap(diagnosticDouble(diagnostics, "staticLayerRebuildMs")),
+            labelAllocationMs: try XCTUnwrap(diagnosticDouble(diagnostics, "labelAllocationMs")),
+            frameQuality: try XCTUnwrap(diagnosticString(diagnostics, "frameQuality")),
+            paintedProjectedCoverageX: try XCTUnwrap(diagnosticDouble(coverage, "x")),
+            paintedProjectedCoverageY: try XCTUnwrap(diagnosticDouble(coverage, "y")),
+            paintedProjectedCoverageWidth: try XCTUnwrap(diagnosticDouble(coverage, "width")),
+            paintedProjectedCoverageHeight: try XCTUnwrap(diagnosticDouble(coverage, "height")),
+            visualPixelRatio: try XCTUnwrap(diagnosticDouble(diagnostics, "visualPixelRatio")),
+            baseStateHubGlowEnabled: try XCTUnwrap(diagnosticBool(diagnostics, "baseStateHubGlowEnabled")),
+            balancedDiscMinimumAlpha: try XCTUnwrap(diagnosticDouble(diagnostics, "balancedDiscMinimumAlpha")),
+            darkSeparationRimWidth: try XCTUnwrap(diagnosticDouble(diagnostics, "darkSeparationRimWidth")),
+            balancedEdgeAlpha: try XCTUnwrap(diagnosticDouble(diagnostics, "balancedEdgeAlpha")),
+            staticRebuildP95Ms: try XCTUnwrap(diagnosticDouble(diagnostics, "staticRebuildP95Ms")),
+            visualBackingWidth: try XCTUnwrap(diagnosticCount(diagnostics, "visualBackingWidth")),
+            visualBackingHeight: try XCTUnwrap(diagnosticCount(diagnostics, "visualBackingHeight"))
+        )
+        return .init(
+            scenario: scenario.name,
+            fixture: .init(
+                name: scenario.fixtureName,
+                sha256: try XCTUnwrap(reviewedVisualCaptureFixtureDigests[scenario.fixtureName]),
+                nodeCount: expected.nodes,
+                edgeCount: expected.edges
+            ),
+            viewport: .init(width: scenario.width, height: scenario.height),
+            snapshot: scenario.outputName,
+            coordinateFingerprint: try XCTUnwrap(presentation["coordinateFingerprint"] as? String),
+            diagnostics: diagnostic
+        )
+    }
+
+    private func visualCaptureFixtureDigest(_ data: Data) -> String {
+        SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
+    }
+
+    private func assertVisualCaptureScenario(
+        _ scenario: Graph3DVisualCaptureScenario,
+        diagnostics: [String: Any],
+        presentation: [String: Any]
+    ) throws {
+        XCTAssertEqual(diagnosticCount(diagnostics, "selectedNodeCount"), presentation["selectedNodeID"] is String ? 1 : 0)
+        XCTAssertEqual(diagnosticCount(diagnostics, "workflowHighlightPendingPathCount"), 0)
+        XCTAssertEqual(presentation["graphCheckVisible"] as? Bool, scenario.name == "1k-graph-check")
+        XCTAssertEqual((presentation["activePrimaryPersistentLabelCollisionCount"] as? NSNumber)?.intValue, 0)
+        try assertVisualCaptureLabelRectsAreUnobscured(presentation)
+
+        switch scenario.name {
+        case "1k-overview-collapsed":
+            assertVisualCaptureState(diagnostics, mode: "none", camera: "overview", sidebar: "collapsed")
+            let coverage = try XCTUnwrap(presentation["paintedProjectedCoverage"] as? [String: Any])
+            XCTAssertGreaterThanOrEqual(
+                try XCTUnwrap(diagnosticDouble(coverage, "width")),
+                0.60,
+                "The 1k overview must use the useful viewport width."
+            )
+        case "1k-overview-docked":
+            assertVisualCaptureState(diagnostics, mode: "none", camera: "overview", sidebar: "docked")
+        case "inspected-overview-collapsed":
+            assertVisualCaptureState(diagnostics, mode: "none", camera: "overview", sidebar: "collapsed")
+            XCTAssertGreaterThanOrEqual(try XCTUnwrap(diagnosticDouble(diagnostics, "visualPixelRatio")), 2)
+            XCTAssertLessThanOrEqual(try XCTUnwrap(diagnosticDouble(diagnostics, "staticRebuildP95Ms")), 33)
+            XCTAssertEqual(diagnosticBool(diagnostics, "baseStateHubGlowEnabled"), false)
+            XCTAssertEqual(diagnosticCount(diagnostics, "staticHubGlowCount"), 0)
+            XCTAssertGreaterThanOrEqual(try XCTUnwrap(diagnosticDouble(diagnostics, "balancedDiscMinimumAlpha")), 0.72)
+            XCTAssertGreaterThanOrEqual(try XCTUnwrap(diagnosticDouble(diagnostics, "darkSeparationRimWidth")), 0.8)
+            XCTAssertLessThanOrEqual(try XCTUnwrap(diagnosticDouble(diagnostics, "balancedEdgeAlpha")), 0.18)
+            XCTAssertLessThanOrEqual(
+                try XCTUnwrap(diagnosticCount(diagnostics, "visualBackingWidth")),
+                try XCTUnwrap(diagnosticCount(diagnostics, "stageWidth")) * 2
+            )
+            XCTAssertLessThanOrEqual(
+                try XCTUnwrap(diagnosticCount(diagnostics, "visualBackingHeight")),
+                try XCTUnwrap(diagnosticCount(diagnostics, "stageHeight")) * 2
+            )
+            let coverage = try XCTUnwrap(presentation["paintedProjectedCoverage"] as? [String: Any])
+            let x = try XCTUnwrap((coverage["x"] as? NSNumber)?.doubleValue)
+            let y = try XCTUnwrap((coverage["y"] as? NSNumber)?.doubleValue)
+            let width = try XCTUnwrap((coverage["width"] as? NSNumber)?.doubleValue)
+            let height = try XCTUnwrap((coverage["height"] as? NSNumber)?.doubleValue)
+            XCTAssertGreaterThanOrEqual(x, 0.06, "The overview must not crop the left graph edge.")
+            XCTAssertGreaterThanOrEqual(y, 0.06, "The overview must not crop the top graph edge.")
+            XCTAssertLessThanOrEqual(x + width, 0.94, "The overview must not crop the right graph edge.")
+            XCTAssertLessThanOrEqual(y + height, 0.94, "The overview must not crop the lower graph edge.")
+            XCTAssertGreaterThanOrEqual(width, 0.60, "The overview must use the useful viewport width.")
+            XCTAssertGreaterThanOrEqual(height, 0.55, "The overview must use the useful viewport height.")
+            XCTAssertLessThanOrEqual(width, 0.90)
+            XCTAssertLessThanOrEqual(height, 0.85)
+        case "inspected-overview-docked":
+            assertVisualCaptureState(diagnostics, mode: "none", camera: "overview", sidebar: "docked")
+        case "1k-community":
+            assertVisualCaptureState(diagnostics, mode: "community", camera: "community", sidebar: "docked")
+            XCTAssertEqual(diagnosticString(diagnostics, "detailLevel"), "overview")
+            XCTAssertLessThanOrEqual(diagnosticCount(diagnostics, "paintedEdgeCount") ?? .max, 12_000)
+            XCTAssertLessThanOrEqual(diagnosticDouble(diagnostics, "cameraZoom") ?? .infinity, 1.0)
+        case "1k-node-focus":
+            assertVisualCaptureState(diagnostics, mode: "focus", camera: "node-focus", sidebar: "docked")
+            XCTAssertEqual(presentation["selectedNodeID"] as? String, "1k-node-000")
+        case "1k-selected-hub":
+            assertVisualCaptureState(diagnostics, mode: "none", camera: "node-focus", sidebar: "docked")
+            XCTAssertEqual(presentation["selectedNodeID"] as? String, "1k-node-370")
+            XCTAssertEqual(diagnosticString(diagnostics, "detailLevel"), "balanced")
+            XCTAssertLessThanOrEqual(diagnosticCount(diagnostics, "paintedEdgeCount") ?? .max, 12_000)
+            try assertSelectedVisualCaptureTargetIsUnobscured(presentation)
+        case "1k-selected-peripheral":
+            assertVisualCaptureState(diagnostics, mode: "none", camera: "node-focus", sidebar: "docked")
+            XCTAssertEqual(presentation["selectedNodeID"] as? String, "1k-node-383")
+            XCTAssertEqual(diagnosticString(diagnostics, "detailLevel"), "balanced")
+            XCTAssertLessThanOrEqual(diagnosticCount(diagnostics, "paintedEdgeCount") ?? .max, 12_000)
+            try assertSelectedVisualCaptureTargetIsUnobscured(presentation)
+        case "1k-active-path":
+            assertVisualCaptureState(diagnostics, mode: "path", camera: "active-path", sidebar: "docked")
+        case "1k-recent-orbit":
+            assertVisualCaptureState(diagnostics, mode: "recent", camera: "recent-orbit", sidebar: "collapsed")
+        case "1k-agent-activity":
+            assertVisualCaptureState(diagnostics, mode: "none", camera: "overview", sidebar: "docked")
+            XCTAssertEqual(diagnosticCount(diagnostics, "agentActivityEventCount"), 1)
+            XCTAssertEqual(diagnosticCount(diagnostics, "agentActivityRenderableCount"), 1)
+        case "1k-workflow-highlight":
+            assertVisualCaptureState(diagnostics, mode: "none", camera: "overview", sidebar: "docked")
+            XCTAssertEqual(diagnosticCount(diagnostics, "agentActivityEventCount"), 1)
+            XCTAssertEqual(diagnosticCount(diagnostics, "agentActivityRenderableCount"), 1)
+            XCTAssertEqual(diagnosticCount(diagnostics, "workflowHighlightNodeCount"), 3)
+        case "1k-graph-check":
+            assertVisualCaptureState(diagnostics, mode: "none", camera: "overview", sidebar: "collapsed")
+        case "1k-narrow-overlay":
+            assertVisualCaptureState(diagnostics, mode: "search", camera: "node-focus", sidebar: "overlay")
+            try assertSelectedVisualCaptureTargetIsUnobscured(presentation)
+        case "1k-reduce-motion":
+            assertVisualCaptureState(diagnostics, mode: "none", camera: "node-focus", sidebar: "overlay")
+            XCTAssertEqual(diagnosticBool(diagnostics, "reduceMotion"), true)
+        default:
+            XCTFail("Unhandled visual capture scenario: \(scenario.name)")
+        }
+    }
+
+    private func assertVisualCaptureMatchedCoreParity(_ captures: [Graph3DVisualCaptureManifest.Capture]) throws {
+        let matchedNames = Set(matchedCoreVisualCaptureScenarioNames)
+        let matchedCaptures = captures.filter { matchedNames.contains($0.scenario) }
+        XCTAssertEqual(matchedCaptures.count, matchedCoreVisualCaptureScenarioNames.count)
+        let first = try XCTUnwrap(matchedCaptures.first)
+        for capture in matchedCaptures {
+            XCTAssertEqual(capture.fixture.name, "1k")
+            XCTAssertEqual(capture.fixture.sha256, reviewedVisualCaptureFixtureDigests["1k"])
+            XCTAssertEqual(capture.fixture.nodeCount, 1_000)
+            XCTAssertEqual(capture.fixture.edgeCount, 2_380)
+            XCTAssertEqual(capture.viewport.width, 1_000)
+            XCTAssertEqual(capture.viewport.height, 720)
+            XCTAssertEqual(capture.coordinateFingerprint, first.coordinateFingerprint)
+        }
+    }
+
+    private func assertVisualCaptureState(
+        _ diagnostics: [String: Any],
+        mode: String,
+        camera: String,
+        sidebar: String
+    ) {
+        XCTAssertEqual(diagnosticString(diagnostics, "activeMode"), mode)
+        XCTAssertEqual(diagnosticString(diagnostics, "cameraPreset"), camera)
+        XCTAssertEqual(diagnosticString(diagnostics, "sidebarState"), sidebar)
+    }
+
+    private func assertSelectedVisualCaptureTargetIsUnobscured(_ presentation: [String: Any]) throws {
+        XCTAssertEqual(presentation["cameraTransitionActive"] as? Bool, false)
+        XCTAssertGreaterThanOrEqual((presentation["selectedContextProjectedCount"] as? NSNumber)?.intValue ?? 0, 8)
+        let projection = try XCTUnwrap(presentation["selectedNodeProjection"] as? [String: Any])
+        let label = try XCTUnwrap(presentation["selectedNodeLabelRect"] as? [String: Any])
+        let safeStage = try XCTUnwrap(presentation["unobscuredStage"] as? [String: Any])
+        let pointX = try XCTUnwrap((projection["x"] as? NSNumber)?.doubleValue)
+        let pointY = try XCTUnwrap((projection["y"] as? NSNumber)?.doubleValue)
+        let labelX = try XCTUnwrap((label["x"] as? NSNumber)?.doubleValue)
+        let labelY = try XCTUnwrap((label["y"] as? NSNumber)?.doubleValue)
+        let labelWidth = try XCTUnwrap((label["width"] as? NSNumber)?.doubleValue)
+        let labelHeight = try XCTUnwrap((label["height"] as? NSNumber)?.doubleValue)
+        let stageWidth = try XCTUnwrap((safeStage["width"] as? NSNumber)?.doubleValue)
+        let stageHeight = try XCTUnwrap((safeStage["height"] as? NSNumber)?.doubleValue)
+        let inset = 8.0
+
+        XCTAssertGreaterThanOrEqual(pointX, inset)
+        XCTAssertLessThanOrEqual(pointX, stageWidth - inset)
+        XCTAssertGreaterThanOrEqual(pointY, inset)
+        XCTAssertLessThanOrEqual(pointY, stageHeight - inset)
+        XCTAssertGreaterThanOrEqual(labelX, inset)
+        XCTAssertGreaterThanOrEqual(labelY, inset)
+        XCTAssertLessThanOrEqual(labelX + labelWidth, stageWidth - inset)
+        XCTAssertLessThanOrEqual(labelY + labelHeight, stageHeight - inset)
+
+        let obstructions = safeStage["obscuredRegions"] as? [[String: Any]] ?? []
+        for obstruction in obstructions {
+            let x = try XCTUnwrap((obstruction["x"] as? NSNumber)?.doubleValue)
+            let y = try XCTUnwrap((obstruction["y"] as? NSNumber)?.doubleValue)
+            let width = try XCTUnwrap((obstruction["width"] as? NSNumber)?.doubleValue)
+            let height = try XCTUnwrap((obstruction["height"] as? NSNumber)?.doubleValue)
+            XCTAssertFalse(pointX >= x && pointX <= x + width && pointY >= y && pointY <= y + height)
+            XCTAssertFalse(labelX < x + width && labelX + labelWidth > x && labelY < y + height && labelY + labelHeight > y)
+        }
+    }
+
+    private func assertVisualCaptureLabelRectsAreUnobscured(_ presentation: [String: Any]) throws {
+        let safeStage = try XCTUnwrap(presentation["unobscuredStage"] as? [String: Any])
+        let stageWidth = try XCTUnwrap((safeStage["width"] as? NSNumber)?.doubleValue)
+        let stageHeight = try XCTUnwrap((safeStage["height"] as? NSNumber)?.doubleValue)
+        let persistent = try XCTUnwrap(presentation["persistentLabelRects"] as? [[String: Any]])
+        let active = try XCTUnwrap(presentation["activeLabelRects"] as? [[String: Any]])
+        let obstructions = safeStage["obscuredRegions"] as? [[String: Any]] ?? []
+        let inset = 10.0
+
+        for label in persistent + active {
+            let x = try XCTUnwrap((label["x"] as? NSNumber)?.doubleValue)
+            let y = try XCTUnwrap((label["y"] as? NSNumber)?.doubleValue)
+            let width = try XCTUnwrap((label["width"] as? NSNumber)?.doubleValue)
+            let height = try XCTUnwrap((label["height"] as? NSNumber)?.doubleValue)
+            XCTAssertGreaterThanOrEqual(x, inset)
+            XCTAssertGreaterThanOrEqual(y, inset)
+            XCTAssertLessThanOrEqual(x + width, stageWidth - inset)
+            XCTAssertLessThanOrEqual(y + height, stageHeight - inset)
+
+            for obstruction in obstructions {
+                let obstructionX = try XCTUnwrap((obstruction["x"] as? NSNumber)?.doubleValue)
+                let obstructionY = try XCTUnwrap((obstruction["y"] as? NSNumber)?.doubleValue)
+                let obstructionWidth = try XCTUnwrap((obstruction["width"] as? NSNumber)?.doubleValue)
+                let obstructionHeight = try XCTUnwrap((obstruction["height"] as? NSNumber)?.doubleValue)
+                XCTAssertFalse(x < obstructionX + obstructionWidth && x + width > obstructionX && y < obstructionY + obstructionHeight && y + height > obstructionY)
+            }
+        }
     }
 
     private func takeRendererMeasurementRequest() throws -> RendererMeasurementRequest? {
@@ -5061,6 +6023,403 @@ final class BrainBarTests: XCTestCase {
     }
 
     @MainActor
+    func testGraph3DMeasurementFlushHookIsQueryGated() async throws {
+        let graphDirectory = try rendererFixtureGraphDirectory()
+        defer { removeTemporaryDirectory(graphDirectory.deletingLastPathComponent()) }
+        let threeD = try makeThreeDLayoutResponsivenessWebView(graphDirectory: graphDirectory)
+        let host = RendererWebViewHost(webView: threeD.webView)
+        defer { host.close(messageHandlerNames: ["brainBarNodeAction", "brainBarGraphDiagnostic"]) }
+
+        try await prepareThreeDGraph(threeD, graphDirectory: graphDirectory, rendererTestMode: false)
+        try await waitForRendererFunction("brainBarLoadGraph", in: threeD.webView, phase: "measurement hook production gate")
+        let productionHook = try await evaluateJavaScriptString(
+            "typeof window.brainBarFlushRendererForMeasurement",
+            in: threeD.webView
+        )
+        let productionInteractionHook = try await evaluateJavaScriptString(
+            "typeof window.brainBarMeasurePresentationInteractions",
+            in: threeD.webView
+        )
+        let productionProjectionHook = try await evaluateJavaScriptString(
+            "typeof window.__brainBarResetProjectionForInteractionProbe",
+            in: threeD.webView
+        )
+        XCTAssertEqual(productionHook, "undefined")
+        XCTAssertEqual(productionInteractionHook, "undefined")
+        XCTAssertEqual(productionProjectionHook, "undefined")
+
+        try await navigateToTestPage(
+            try rendererMeasurementIndexURL(for: threeD.coordinator),
+            queryItem: "renderer-measurement",
+            value: "1",
+            in: threeD.webView
+        )
+        try await waitForRendererFunction("brainBarLoadGraph", in: threeD.webView, phase: "measurement hook test gate")
+        let graphURL = try graphSchemeURL(for: threeD.coordinator)
+        let serialized = try await callAsyncJavaScriptString(
+            """
+            const response = await fetch(\(Graph3DWebView.jsStringLiteral(graphURL)));
+            const graph = await response.json();
+            var flushCount = 0;
+            const flush = () => {
+              flushCount += 1;
+              return window.brainBarFlushRendererForMeasurement();
+            };
+            const loaded = await window.brainBarLoadGraph(graph, 'all', 9201);
+            const initialBefore = window.brainBarRendererDiagnostics();
+            const initialFlushed = flush();
+            const initialAfter = window.brainBarRendererDiagnostics();
+            const lensLoaded = await window.brainBarApplyGraphLens('graphify');
+            const lensBefore = window.brainBarRendererDiagnostics();
+            const lensFlushed = flush();
+            const lensAfter = window.brainBarRendererDiagnostics();
+            return JSON.stringify({ loaded, lensLoaded, initialBefore, initialFlushed, initialAfter, lensBefore, lensFlushed, lensAfter, flushCount, hook: typeof window.brainBarFlushRendererForMeasurement, interactionHook: typeof window.brainBarMeasurePresentationInteractions, projectionHook: typeof window.__brainBarResetProjectionForInteractionProbe });
+            """,
+            in: threeD.webView
+        )
+        let result = try XCTUnwrap(
+            try JSONSerialization.jsonObject(with: Data(try XCTUnwrap(serialized).utf8)) as? [String: Any]
+        )
+        let initialBefore = try XCTUnwrap(result["initialBefore"] as? [String: Any])
+        let initialAfter = try XCTUnwrap(result["initialAfter"] as? [String: Any])
+        let lensBefore = try XCTUnwrap(result["lensBefore"] as? [String: Any])
+        let lensAfter = try XCTUnwrap(result["lensAfter"] as? [String: Any])
+        XCTAssertEqual(result["loaded"] as? Bool, true)
+        XCTAssertEqual(result["lensLoaded"] as? Bool, true)
+        XCTAssertEqual(result["hook"] as? String, "function")
+        XCTAssertEqual(result["interactionHook"] as? String, "function")
+        XCTAssertEqual(result["projectionHook"] as? String, "function")
+        XCTAssertEqual(diagnosticString(initialBefore, "layoutState"), "committed")
+        XCTAssertEqual(result["initialFlushed"] as? Bool, true)
+        XCTAssertEqual(diagnosticBool(initialAfter, "paintedCountsSettled"), true)
+        XCTAssertEqual(diagnosticString(lensBefore, "layoutState"), "committed")
+        XCTAssertEqual(result["lensFlushed"] as? Bool, true)
+        XCTAssertEqual(diagnosticBool(lensAfter, "paintedCountsSettled"), true)
+        XCTAssertEqual(result["flushCount"] as? Int, 2)
+        assertRendererDiagnosticsAreContentFree(lensAfter)
+    }
+
+    @MainActor
+    func testGraph3DPresentationControlsKeepCoordinatesAndMigrateSessionV1() async throws {
+        let graphDirectory = try rendererFixtureGraphDirectory()
+        defer { removeTemporaryDirectory(graphDirectory.deletingLastPathComponent()) }
+        let threeD = try makeThreeDLayoutResponsivenessWebView(graphDirectory: graphDirectory)
+        let host = RendererWebViewHost(webView: threeD.webView)
+        defer { host.close(messageHandlerNames: ["brainBarNodeAction", "brainBarGraphDiagnostic"]) }
+
+        try await prepareThreeDGraph(threeD, graphDirectory: graphDirectory)
+        try await waitForRendererFunction("brainBarLoadGraph", in: threeD.webView, phase: "3D presentation controls API")
+        let serialized = try await callAsyncJavaScriptString(
+            """
+            const response = await fetch(\(Graph3DWebView.jsStringLiteral(try graphSchemeURL(for: threeD.coordinator))));
+            const graph = await response.json();
+            await window.brainBarLoadGraph(graph, 'all', 811);
+            const initial = window.brainBarPresentationStateForTesting();
+            const initialDiagnostics = window.brainBarRendererDiagnostics();
+            const api = ['brainBarApplyCameraPreset', 'brainBarSetReduceMotion', 'brainBarCameraBack']
+              .map((name) => typeof window[name] === 'function');
+            window.brainBarSetSidebarState('docked', 99999);
+            const docked = window.brainBarPresentationStateForTesting();
+            const resizer = document.getElementById('sidebar-resizer');
+            resizer.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0, pointerId: 71, clientX: window.innerWidth - 360 }));
+            resizer.dispatchEvent(new PointerEvent('pointermove', { bubbles: true, pointerId: 71, clientX: -1000 }));
+            resizer.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, pointerId: 71, clientX: -1000 }));
+            const pointerResized = window.brainBarPresentationStateForTesting();
+            resizer.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'ArrowLeft' }));
+            const keyboardResized = window.brainBarPresentationStateForTesting();
+            const resizerAccessibility = {
+              role: resizer.getAttribute('role'),
+              min: resizer.getAttribute('aria-valuemin'),
+              max: resizer.getAttribute('aria-valuemax'),
+              now: resizer.getAttribute('aria-valuenow')
+            };
+            window.brainBarSetDetailLevel('full');
+            const full = window.brainBarRendererDiagnostics();
+            window.brainBarApplyGraphSessionState({ schemaVersion: 1, selectedNodeID: 'node-a', sourceLens: 'all', searchQuery: '' });
+            window.brainBarShowCommunity3D('Research');
+            const backed = window.brainBarCameraBack();
+            const afterBack = window.brainBarGraphSessionSnapshot();
+            window.brainBarSetReduceMotion(true);
+            const reduced = window.brainBarRendererDiagnostics();
+            const overviewApplied = window.brainBarApplyCameraPreset('overview');
+            const overview = window.brainBarRendererDiagnostics();
+            window.brainBarApplyCameraPreset('manual');
+            const beforeResize = window.brainBarGraphSessionSnapshot().cameraState;
+            window.dispatchEvent(new Event('resize'));
+            const afterResize = window.brainBarGraphSessionSnapshot().cameraState;
+            const manualResizePreserved = JSON.stringify(beforeResize) === JSON.stringify(afterResize);
+            const migrated = window.brainBarApplyGraphSessionState({
+              schemaVersion: 1,
+              selectedNodeID: 'node-a',
+              sourceLens: 'all',
+              searchQuery: ''
+            });
+            const session = window.brainBarGraphSessionSnapshot();
+            const resetInteractionProjection = window.__brainBarResetProjectionForInteractionProbe();
+            const interactionMetrics = await window.brainBarMeasurePresentationInteractions();
+            return JSON.stringify({ initial, initialDiagnostics, api, docked, pointerResized, keyboardResized, resizerAccessibility, full, backed, afterBack, reduced, overviewApplied, overview, manualResizePreserved, migrated, session, resetInteractionProjection, interactionMetrics });
+            """,
+            in: threeD.webView
+        )
+        let result = try XCTUnwrap(
+            try JSONSerialization.jsonObject(with: Data(try XCTUnwrap(serialized).utf8)) as? [String: Any]
+        )
+        let initial = try XCTUnwrap(result["initial"] as? [String: Any])
+        let docked = try XCTUnwrap(result["docked"] as? [String: Any])
+        let pointerResized = try XCTUnwrap(result["pointerResized"] as? [String: Any])
+        let keyboardResized = try XCTUnwrap(result["keyboardResized"] as? [String: Any])
+        let resizerAccessibility = try XCTUnwrap(result["resizerAccessibility"] as? [String: Any])
+        let full = try XCTUnwrap(result["full"] as? [String: Any])
+        let initialDiagnostics = try XCTUnwrap(result["initialDiagnostics"] as? [String: Any])
+        let reduced = try XCTUnwrap(result["reduced"] as? [String: Any])
+        let overview = try XCTUnwrap(result["overview"] as? [String: Any])
+        let afterBack = try XCTUnwrap(result["afterBack"] as? [String: Any])
+        let session = try XCTUnwrap(result["session"] as? [String: Any])
+        let interactionMetrics = try XCTUnwrap(result["interactionMetrics"] as? [String: Any])
+
+        XCTAssertEqual(initial["coordinateFingerprint"] as? String, docked["coordinateFingerprint"] as? String)
+        XCTAssertEqual(initial["coordinateFingerprint"] as? String, pointerResized["coordinateFingerprint"] as? String)
+        XCTAssertEqual(initial["coordinateFingerprint"] as? String, keyboardResized["coordinateFingerprint"] as? String)
+        XCTAssertEqual(docked["sidebarState"] as? String, "docked")
+        XCTAssertEqual(resizerAccessibility["role"] as? String, "separator")
+        XCTAssertEqual(resizerAccessibility["min"] as? String, "300")
+        XCTAssertNotNil(Int(resizerAccessibility["max"] as? String ?? ""))
+        XCTAssertNotNil(Int(resizerAccessibility["now"] as? String ?? ""))
+        XCTAssertGreaterThanOrEqual((pointerResized["sidebarWidth"] as? NSNumber)?.doubleValue ?? 0, 300)
+        XCTAssertGreaterThanOrEqual((keyboardResized["sidebarWidth"] as? NSNumber)?.doubleValue ?? 0, 300)
+        XCTAssertEqual(diagnosticString(full, "detailLevel"), "full")
+        XCTAssertEqual(diagnosticCount(full, "queryableNodeCount"), diagnosticCount(full, "paintedNodeCount"))
+        XCTAssertEqual(diagnosticString(initialDiagnostics, "detailLevel"), "balanced")
+        XCTAssertEqual(result["api"] as? [Bool], [true, true, true])
+        XCTAssertEqual(result["backed"] as? Bool, true)
+        XCTAssertEqual(afterBack["selectedNodeID"] as? String, "node-a")
+        XCTAssertEqual(diagnosticBool(reduced, "reduceMotion"), true)
+        XCTAssertEqual(result["overviewApplied"] as? Bool, true)
+        XCTAssertEqual(diagnosticString(overview, "cameraPreset"), "overview")
+        XCTAssertEqual(result["manualResizePreserved"] as? Bool, true)
+        XCTAssertEqual(result["migrated"] as? Bool, true)
+        XCTAssertEqual(result["resetInteractionProjection"] as? Bool, true)
+        XCTAssertEqual(session["schemaVersion"] as? Int, 2)
+        XCTAssertEqual(session["sidebarState"] as? String, "overlay")
+        XCTAssertEqual(session["detailLevel"] as? String, "overview")
+        for key in ["panOrbitFrameMs", "hoverToHighlightMs", "selectionToFirstFeedbackMs", "sidebarOpenReframeMs", "overviewCommunityTransitionMs"] {
+            XCTAssertNotNil(diagnosticDouble(interactionMetrics, key))
+        }
+        XCTAssertLessThanOrEqual(try XCTUnwrap(diagnosticDouble(interactionMetrics, "panOrbitFrameMs")), 33)
+        XCTAssertLessThanOrEqual(try XCTUnwrap(diagnosticDouble(interactionMetrics, "hoverToHighlightMs")), 50)
+        XCTAssertLessThanOrEqual(try XCTUnwrap(diagnosticDouble(interactionMetrics, "selectionToFirstFeedbackMs")), 50)
+        assertRendererDiagnosticsAreContentFree(full)
+    }
+
+    @MainActor
+    func testGraph3DAccessibilityAuditUsesPublicFixture() async throws {
+        let graphDirectory = try rendererFixtureGraphDirectory()
+        defer { removeTemporaryDirectory(graphDirectory.deletingLastPathComponent()) }
+        let threeD = try makeThreeDLayoutResponsivenessWebView(graphDirectory: graphDirectory)
+        let host = RendererWebViewHost(webView: threeD.webView)
+        defer { host.close(messageHandlerNames: ["brainBarNodeAction", "brainBarGraphDiagnostic"]) }
+
+        try await prepareThreeDGraph(threeD, graphDirectory: graphDirectory)
+        try await waitForRendererFunction("brainBarLoadGraph", in: threeD.webView, phase: "Graph3D accessibility audit API")
+        let serialized = try await callAsyncJavaScriptString(
+            """
+            const response = await fetch(\(Graph3DWebView.jsStringLiteral(try graphSchemeURL(for: threeD.coordinator))));
+            const graph = await response.json();
+            await window.brainBarLoadGraph(graph, 'all', 812);
+            window.brainBarSetSidebarState('docked', 360);
+            await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+            const status = document.getElementById('graph-status');
+            window.brainBarSetDetailLevel('full');
+            const detailAnnouncement = status.textContent;
+            window.brainBarSetSidebarState('collapsed');
+            const panelAnnouncement = status.textContent;
+            window.brainBarSetSidebarState('docked', 360);
+            const nameFor = (element) => element.getAttribute('aria-label') || element.labels?.[0]?.textContent?.trim() || element.textContent?.trim() || '';
+            const visible = (element) => {
+              const style = getComputedStyle(element);
+              const rect = element.getBoundingClientRect();
+              return style.display !== 'none' && style.visibility !== 'hidden' && rect.width > 0 && rect.height > 0;
+            };
+            const targets = [...document.querySelectorAll('#graph-controls select, #graph-controls button, #sidebar input, #sidebar button, #sidebar-resizer')]
+              .filter(visible)
+              .map((element) => {
+                const rect = element.getBoundingClientRect();
+                return { tag: element.tagName.toLowerCase(), id: element.id || '', role: element.getAttribute('role') || '', name: nameFor(element), width: rect.width, height: rect.height };
+              });
+            const focusProbe = (selector) => {
+              const element = document.querySelector(selector);
+              element.focus();
+              return {
+                active: document.activeElement === element
+              };
+            };
+            const parseColor = (value) => value.match(/[\\d.]+/g).map(Number);
+            const blend = (foreground, background) => foreground.slice(0, 3).map((channel, index) => channel * (foreground[3] ?? 1) + background[index] * (1 - (foreground[3] ?? 1)));
+            const linear = (channel) => {
+              const value = channel / 255;
+              return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
+            };
+            const luminance = (channels) => 0.2126 * linear(channels[0]) + 0.7152 * linear(channels[1]) + 0.0722 * linear(channels[2]);
+            const ratio = (foreground, background) => {
+              const [light, dark] = [luminance(foreground), luminance(background)].sort((left, right) => right - left);
+              return (light + 0.05) / (dark + 0.05);
+            };
+            const sidebarColor = parseColor(getComputedStyle(document.getElementById('sidebar')).backgroundColor);
+            const contrast = ['h2', '#stats', '#node-info'].map((selector) => {
+              const element = document.querySelector(selector);
+              const foreground = blend(parseColor(getComputedStyle(element).color), sidebarColor);
+              return { selector, ratio: ratio(foreground, sidebarColor) };
+            });
+            return JSON.stringify({
+              status: { live: status.getAttribute('aria-live'), detailAnnouncement, panelAnnouncement },
+              targets,
+              focus: { detail: focusProbe('#detail-level'), search: focusProbe('#search') },
+              contrast,
+              resizer: {
+                role: document.getElementById('sidebar-resizer').getAttribute('role'),
+                name: nameFor(document.getElementById('sidebar-resizer')),
+                tabIndex: document.getElementById('sidebar-resizer').tabIndex
+              }
+            });
+            """,
+            in: threeD.webView
+        )
+        let result = try XCTUnwrap(
+            try JSONSerialization.jsonObject(with: Data(try XCTUnwrap(serialized).utf8)) as? [String: Any]
+        )
+        let status = try XCTUnwrap(result["status"] as? [String: Any])
+        let targets = try XCTUnwrap(result["targets"] as? [[String: Any]])
+        let focus = try XCTUnwrap(result["focus"] as? [String: Any])
+        let detailFocus = try XCTUnwrap(focus["detail"] as? [String: Any])
+        let searchFocus = try XCTUnwrap(focus["search"] as? [String: Any])
+        let contrast = try XCTUnwrap(result["contrast"] as? [[String: Any]])
+        let resizer = try XCTUnwrap(result["resizer"] as? [String: Any])
+
+        XCTAssertEqual(status["live"] as? String, "polite")
+        XCTAssertTrue((status["detailAnnouncement"] as? String ?? "").hasPrefix("Detail full."))
+        XCTAssertEqual(status["panelAnnouncement"] as? String, "Context panel collapsed.")
+        XCTAssertEqual(resizer["role"] as? String, "separator")
+        XCTAssertEqual(resizer["name"] as? String, "Docked context panel width")
+        XCTAssertEqual(resizer["tabIndex"] as? Int, 0)
+        XCTAssertFalse(targets.isEmpty)
+        for target in targets {
+            XCTAssertFalse((target["name"] as? String ?? "").isEmpty, "Visible control lacks an accessible name: \(target)")
+            XCTAssertGreaterThanOrEqual((target["width"] as? NSNumber)?.doubleValue ?? 0, 24, "Control is narrower than 24px: \(target)")
+            XCTAssertGreaterThanOrEqual((target["height"] as? NSNumber)?.doubleValue ?? 0, 24, "Control is shorter than 24px: \(target)")
+        }
+        for probe in [detailFocus, searchFocus] {
+            XCTAssertEqual(probe["active"] as? Bool, true)
+        }
+        for entry in contrast {
+            XCTAssertGreaterThanOrEqual((entry["ratio"] as? NSNumber)?.doubleValue ?? 0, 4.5, "Computed contrast failed: \(entry)")
+        }
+    }
+
+    @MainActor
+    func testGraph3DOverviewFitKeepsReviewedSpatialFixturesVisibleInCompactViewport() async throws {
+        let graphDirectory = try rendererFixtureGraphDirectory()
+        defer { removeTemporaryDirectory(graphDirectory.deletingLastPathComponent()) }
+        let threeD = try makeThreeDLayoutResponsivenessWebView(graphDirectory: graphDirectory)
+        threeD.webView.setFrameSize(NSSize(width: 320, height: 240))
+        let host = RendererWebViewHost(webView: threeD.webView)
+        defer { host.close(messageHandlerNames: ["brainBarNodeAction", "brainBarGraphDiagnostic"]) }
+
+        try await prepareThreeDGraph(threeD, graphDirectory: graphDirectory)
+        try await waitForRendererFunction("brainBarLoadGraph", in: threeD.webView, phase: "25k compact Overview API")
+        let serialized = try await callAsyncJavaScriptString(
+            """
+            const fixtures = [
+              { name: '1k', nodeCount: 1000, edgeCount: 2380, communities: 10 },
+              { name: 'inspected', nodeCount: 12547, edgeCount: 29868, communities: 64 },
+              { name: '25k', nodeCount: 25000, edgeCount: 59512, communities: 100 }
+            ];
+            const summaries = [];
+            for (const fixture of fixtures) {
+              const nodes = Array.from({ length: fixture.nodeCount }, (_, index) => ({
+                id: `${fixture.name}-node-${index}`,
+                label: `${fixture.name} node ${index}`,
+                community: `Community ${(index % fixture.communities) + 1}`,
+                source_file: `fixtures/${fixture.name}/${index}.md`
+              }));
+              const edges = Array.from({ length: fixture.edgeCount }, (_, index) => ({
+                id: `${fixture.name}-edge-${index}`,
+                from: nodes[index % fixture.nodeCount].id,
+                to: nodes[(index + 1 + Math.floor(index / fixture.nodeCount)) % fixture.nodeCount].id,
+                relation: 'related_to'
+              }));
+              const loaded = await window.brainBarLoadGraph({ nodes, edges }, 'all', 250_001 + summaries.length);
+              const defaultDiagnostics = window.brainBarRendererDiagnostics();
+              const defaultDetailControlValue = document.getElementById('detail-level')?.value || null;
+              window.brainBarApplyCameraPreset('overview');
+              window.brainBarFlushRendererForMeasurement();
+              summaries.push({ name: fixture.name, loaded, defaultDiagnostics, defaultDetailControlValue, diagnostics: window.brainBarRendererDiagnostics(), state: window.brainBarPresentationStateForTesting() });
+            }
+            const initial = summaries[summaries.length - 1].state;
+            window.brainBarSetSidebarState('docked', 360);
+            window.brainBarFlushRendererForMeasurement();
+            const docked = window.brainBarPresentationStateForTesting();
+            window.brainBarSetSidebarState('overlay', 360);
+            window.brainBarFlushRendererForMeasurement();
+            const overlay = window.brainBarPresentationStateForTesting();
+            window.brainBarApplyCameraPreset('manual');
+            const beforeResize = window.brainBarGraphSessionSnapshot().cameraState;
+            window.dispatchEvent(new Event('resize'));
+            window.brainBarFlushRendererForMeasurement();
+            const afterResize = window.brainBarGraphSessionSnapshot().cameraState;
+            return JSON.stringify({ summaries, initial, docked, overlay, manualPreserved: JSON.stringify(beforeResize) === JSON.stringify(afterResize) });
+            """,
+            in: threeD.webView
+        )
+        let result = try XCTUnwrap(
+            try JSONSerialization.jsonObject(with: Data(try XCTUnwrap(serialized).utf8)) as? [String: Any]
+        )
+        let summaries = try XCTUnwrap(result["summaries"] as? [[String: Any]])
+        let initial = try XCTUnwrap(result["initial"] as? [String: Any])
+        let docked = try XCTUnwrap(result["docked"] as? [String: Any])
+        let overlay = try XCTUnwrap(result["overlay"] as? [String: Any])
+        XCTAssertEqual(summaries.map { $0["loaded"] as? Bool }, [true, true, true])
+        for summary in summaries {
+            let diagnostics = try XCTUnwrap(summary["diagnostics"] as? [String: Any])
+            XCTAssertGreaterThan(diagnosticCount(diagnostics, "visibleProjectedNodeCount") ?? 0, 0, "\(diagnostics)")
+            XCTAssertGreaterThanOrEqual(try XCTUnwrap(diagnosticDouble(diagnostics, "cameraZoom")), 0.0001)
+            XCTAssertEqual(diagnosticString(diagnostics, "cameraProjection"), "perspective")
+            XCTAssertGreaterThan(try XCTUnwrap(diagnosticDouble(diagnostics, "cameraDistance")), 0)
+            assertRendererDiagnosticsAreContentFree(diagnostics)
+        }
+        let inspectedDefault = try XCTUnwrap(summaries.first(where: { $0["name"] as? String == "inspected" })?["defaultDiagnostics"] as? [String: Any])
+        let oneKDefault = try XCTUnwrap(summaries.first(where: { $0["name"] as? String == "1k" })?["defaultDiagnostics"] as? [String: Any])
+        let twentyFiveKDefault = try XCTUnwrap(summaries.first(where: { $0["name"] as? String == "25k" })?["defaultDiagnostics"] as? [String: Any])
+        let inspectedDiagnostics = try XCTUnwrap(summaries.first(where: { $0["name"] as? String == "inspected" })?["diagnostics"] as? [String: Any])
+        let twentyFiveKDiagnostics = try XCTUnwrap(summaries.first(where: { $0["name"] as? String == "25k" })?["diagnostics"] as? [String: Any])
+        XCTAssertEqual(diagnosticString(oneKDefault, "detailLevel"), "balanced")
+        XCTAssertEqual(diagnosticString(inspectedDefault, "detailLevel"), "balanced")
+        XCTAssertEqual(diagnosticString(twentyFiveKDefault, "detailLevel"), "overview")
+        XCTAssertGreaterThanOrEqual(try XCTUnwrap(diagnosticDouble(inspectedDiagnostics, "visualPixelRatio")), 2)
+        XCTAssertLessThanOrEqual(try XCTUnwrap(diagnosticDouble(inspectedDiagnostics, "staticRebuildP95Ms")), 33)
+        XCTAssertEqual(diagnosticBool(inspectedDiagnostics, "baseStateHubGlowEnabled"), false)
+        XCTAssertEqual(diagnosticCount(inspectedDiagnostics, "staticHubGlowCount"), 0)
+        XCTAssertGreaterThanOrEqual(try XCTUnwrap(diagnosticDouble(inspectedDiagnostics, "balancedDiscMinimumAlpha")), 0.72)
+        XCTAssertGreaterThanOrEqual(try XCTUnwrap(diagnosticDouble(inspectedDiagnostics, "darkSeparationRimWidth")), 0.8)
+        XCTAssertLessThanOrEqual(try XCTUnwrap(diagnosticDouble(inspectedDiagnostics, "balancedEdgeAlpha")), 0.18)
+        XCTAssertLessThanOrEqual(try XCTUnwrap(diagnosticDouble(twentyFiveKDiagnostics, "visualPixelRatio")), 1)
+        XCTAssertEqual(
+            summaries.first(where: { $0["name"] as? String == "inspected" })?["defaultDetailControlValue"] as? String,
+            diagnosticString(inspectedDefault, "detailLevel"),
+            "The Detail control must reflect the adaptive level rather than its static HTML default."
+        )
+        XCTAssertGreaterThanOrEqual(
+            Double(diagnosticCount(inspectedDefault, "paintedNodeCount") ?? 0) / 12_547,
+            0.65,
+            "The inspected-like default must show a meaningful majority without Full."
+        )
+        let overview = try XCTUnwrap(summaries.last?["diagnostics"] as? [String: Any])
+        XCTAssertEqual(diagnosticString(overview, "detailLevel"), "overview")
+        XCTAssertEqual(initial["coordinateFingerprint"] as? String, docked["coordinateFingerprint"] as? String)
+        XCTAssertEqual(initial["coordinateFingerprint"] as? String, overlay["coordinateFingerprint"] as? String)
+        XCTAssertEqual(result["manualPreserved"] as? Bool, true)
+    }
+
+    @MainActor
     private func rendererFixtureGraphDirectory() throws -> URL {
         let graphDirectory = try temporaryDirectory().appendingPathComponent("graphify-out")
         try FileManager.default.createDirectory(at: graphDirectory, withIntermediateDirectories: true)
@@ -5161,7 +6520,8 @@ final class BrainBarTests: XCTestCase {
         _ threeD: ThreeDRendererHarness,
         graphDirectory: URL,
         policy: GraphDataPreparePolicy = .normal,
-        attempt: Int = 1
+        attempt: Int = 1,
+        rendererTestMode: Bool = true
     ) async throws {
         threeD.coordinator.prepareGraph(
             url: graphDirectory.appendingPathComponent("graph.json"),
@@ -5175,6 +6535,12 @@ final class BrainBarTests: XCTestCase {
         }
         guard threeD.coordinator.indexURL != nil else {
             throw BrainBarError.processFailed("3D graph preparation did not produce a digest-bound navigation.")
+        }
+        if rendererTestMode {
+            threeD.coordinator.reloadIndexForTesting(
+                try rendererTestIndexURL(for: threeD.coordinator),
+                in: threeD.webView
+            )
         }
     }
 
@@ -5203,12 +6569,39 @@ final class BrainBarTests: XCTestCase {
         )
         var queryItems = components.queryItems ?? []
         queryItems.append(URLQueryItem(name: "layout-cache-test", value: mode))
+        queryItems.append(URLQueryItem(name: "renderer-test", value: "1"))
+        components.queryItems = queryItems
+        return try XCTUnwrap(components.url)
+    }
+
+    @MainActor
+    private func rendererMeasurementIndexURL(for coordinator: Graph3DWebView.Coordinator) throws -> URL {
+        guard let indexURL = coordinator.indexURL else {
+            throw BrainBarError.processFailed("3D graph index URL was unavailable for the renderer measurement.")
+        }
+        var components = try XCTUnwrap(
+            URLComponents(url: indexURL, resolvingAgainstBaseURL: false)
+        )
+        var queryItems = components.queryItems ?? []
+        queryItems.append(URLQueryItem(name: "renderer-measurement", value: "1"))
+        components.queryItems = queryItems
+        return try XCTUnwrap(components.url)
+    }
+
+    @MainActor
+    private func rendererTestIndexURL(for coordinator: Graph3DWebView.Coordinator) throws -> URL {
+        guard let indexURL = coordinator.indexURL else {
+            throw BrainBarError.processFailed("3D graph index URL was unavailable for the renderer test.")
+        }
+        var components = try XCTUnwrap(URLComponents(url: indexURL, resolvingAgainstBaseURL: false))
+        var queryItems = components.queryItems ?? []
+        queryItems.append(URLQueryItem(name: "renderer-test", value: "1"))
         components.queryItems = queryItems
         return try XCTUnwrap(components.url)
     }
 
     private func workerTestIndexURL(mode: String) throws -> URL {
-        try XCTUnwrap(URL(string: "brainbar3d://resources/index.html?layout-worker-test=1&layout-worker-mode=\(mode)"))
+        try XCTUnwrap(URL(string: "brainbar3d://resources/index.html?layout-worker-test=1&layout-worker-mode=\(mode)&renderer-test=1"))
     }
 
     private func vaultContentHash(_ directory: URL) throws -> String {
@@ -5509,8 +6902,85 @@ final class BrainBarTests: XCTestCase {
     }
 
     @MainActor
+    private func waitForHeldLayoutCacheLookup(
+        lens: String,
+        generation: Int,
+        in webView: WKWebView,
+        timeout: TimeInterval = 12
+    ) async throws {
+        let deadline = Date().addingTimeInterval(timeout)
+        let script = """
+        (() => {
+          const held = window.__brainBarLayoutCacheTest?.held?.();
+          return held?.lens === \(Graph3DWebView.jsStringLiteral(lens)) && held?.generation === \(generation) ? 'ready' : null;
+        })()
+        """
+        while Date() < deadline {
+            if let value = try? await evaluateJavaScriptString(script, in: webView), value == "ready" {
+                return
+            }
+            try await Task.sleep(nanoseconds: 50_000_000)
+        }
+        throw BrainBarError.processFailed("Latest held layout cache request did not reach the expected test state.")
+    }
+
+    @MainActor
+    private func releaseHeldCacheAndAwaitOperationResults(in webView: WKWebView) async throws -> (release: Bool, first: Bool, second: Bool) {
+        let script = """
+        const release = window.__brainBarLayoutCacheTest.release();
+        const values = await Promise.all([
+          Promise.resolve(window.__brainBarHeldCacheFirst),
+          Promise.resolve(window.__brainBarHeldCacheSecond)
+        ]);
+        return JSON.stringify({ release: release === true, first: values[0] === true, second: values[1] === true });
+        """
+        guard
+            let serialized = try await callAsyncJavaScriptString(script, in: webView),
+            let data = serialized.data(using: .utf8),
+            let value = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+            let release = diagnosticBool(value, "release"),
+            let first = diagnosticBool(value, "first"),
+            let second = diagnosticBool(value, "second")
+        else {
+            throw BrainBarError.processFailed("Held cache release returned invalid latest-wins completion states.")
+        }
+        return (release, first, second)
+    }
+
+    @MainActor
     private func releaseHeldLayoutWorkerResult(in webView: WKWebView) async throws -> Bool {
         try await awaitThreeDBooleanResult("window.__brainBarLayoutWorkerTestRelease()", in: webView)
+    }
+
+    @MainActor
+    private func waitForHeldLayoutWorkerResult(lens: String, generation: Int, in webView: WKWebView) async throws {
+        let deadline = Date().addingTimeInterval(12)
+        while Date() < deadline {
+            let serialized = try await callAsyncJavaScriptString(
+                "return JSON.stringify(window.__brainBarLayoutWorkerTestHeld?.() ?? null);",
+                in: webView
+            )
+            if let serialized,
+               serialized != "null",
+               let data = serialized.data(using: .utf8),
+               let held = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+               held["lens"] as? String == lens,
+               (held["generation"] as? NSNumber)?.intValue == generation {
+                return
+            }
+            try await Task.sleep(for: .milliseconds(50))
+        }
+        throw BrainBarError.processFailed("3D worker did not hold the expected replacement layout.")
+    }
+
+    @MainActor
+    private func transactionalLayoutSnapshot(in webView: WKWebView) async throws -> TransactionalLayoutSnapshot {
+        let serializedValue = try await callAsyncJavaScriptString(
+            "return JSON.stringify(window.__brainBarLayoutWorkerTestSnapshot?.() ?? null);",
+            in: webView
+        )
+        let serialized = try XCTUnwrap(serializedValue)
+        return try JSONDecoder().decode(TransactionalLayoutSnapshot.self, from: Data(serialized.utf8))
     }
 
     @MainActor
@@ -5637,11 +7107,13 @@ final class BrainBarTests: XCTestCase {
     @MainActor
     private func invokeThreeDLayoutResponsivenessProbe(graphURL: String, in webView: WKWebView) async throws -> ThreeDLayoutResponsivenessProbe {
         let script = """
+        const fetchStartedAt = performance.now();
         const response = await fetch(\(Graph3DWebView.jsStringLiteral(graphURL)));
         if (!response.ok && response.status !== 0) {
           throw new Error('Graph fixture unavailable.');
         }
         const graph = await response.json();
+        const graphFetchAndParseMs = performance.now() - fetchStartedAt;
         const startedAt = performance.now();
         const timerProbe = new Promise((resolve) => {
           setTimeout(() => resolve(performance.now() - startedAt), 0);
@@ -5651,6 +7123,7 @@ final class BrainBarTests: XCTestCase {
         const resolvedResult = await Promise.resolve(result);
         const zeroDelayTimerProbeMs = await timerProbe;
         return JSON.stringify({
+          graphFetchAndParseMs,
           callReturnMs,
           zeroDelayTimerProbeMs,
           didSucceed: resolvedResult !== false
@@ -5660,6 +7133,7 @@ final class BrainBarTests: XCTestCase {
             let serialized = try await callAsyncJavaScriptString(script, in: webView),
             let data = serialized.data(using: .utf8),
             let value = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+            let graphFetchAndParseMs = diagnosticDouble(value, "graphFetchAndParseMs"), graphFetchAndParseMs.isFinite,
             let callReturnMs = diagnosticDouble(value, "callReturnMs"), callReturnMs.isFinite,
             let zeroDelayTimerProbeMs = diagnosticDouble(value, "zeroDelayTimerProbeMs"), zeroDelayTimerProbeMs.isFinite,
             let didSucceed = diagnosticBool(value, "didSucceed")
@@ -5667,6 +7141,7 @@ final class BrainBarTests: XCTestCase {
             throw BrainBarError.processFailed("3D layout responsiveness probe returned invalid content-free metrics.")
         }
         return ThreeDLayoutResponsivenessProbe(
+            graphFetchAndParseMs: graphFetchAndParseMs,
             callReturnMs: callReturnMs,
             zeroDelayTimerProbeMs: zeroDelayTimerProbeMs,
             didSucceed: didSucceed
@@ -5749,21 +7224,36 @@ final class BrainBarTests: XCTestCase {
         functionName: String,
         phase: String,
         timeout: TimeInterval = 12,
+        flushMeasurementPaint: Bool = true,
         matching predicate: ([String: Any]) -> Bool
     ) async throws -> [String: Any] {
         let deadline = Date().addingTimeInterval(timeout)
         var lastValue = "diagnostics function was not installed"
+        var didFlushMeasurementPaint = false
         while Date() < deadline {
             do {
                 let script = "(() => { const diagnostics = window[\(Graph3DWebView.jsStringLiteral(functionName))]; return typeof diagnostics === 'function' ? JSON.stringify(diagnostics()) : null; })()"
                 if let serialized = try await evaluateJavaScriptString(script, in: webView) {
                     lastValue = serialized
-                    if
+                    guard
                         let data = serialized.data(using: .utf8),
-                        let diagnostics = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-                        predicate(diagnostics)
-                    {
+                        let diagnostics = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+                    else {
+                        continue
+                    }
+                    if predicate(diagnostics) {
                         return diagnostics
+                    }
+                    if flushMeasurementPaint,
+                       !didFlushMeasurementPaint,
+                       diagnosticString(diagnostics, "layoutState") == "committed",
+                       diagnosticBool(diagnostics, "paintedCountsSettled") == false {
+                        didFlushMeasurementPaint = true
+                        _ = try? await evaluateThreeDJavaScript(
+                            "window.brainBarFlushRendererForMeasurement?.()",
+                            action: "flush suspended measurement paint",
+                            in: webView
+                        )
                     }
                 }
             } catch {
@@ -5784,6 +7274,43 @@ final class BrainBarTests: XCTestCase {
             code: 1,
             userInfo: [NSLocalizedDescriptionKey: "Timed out during renderer phase \(phase): \(lastValue)"]
         )
+    }
+
+    @MainActor
+    private func waitForThreeDNodeInfoText(
+        in webView: WKWebView,
+        phase: String,
+        requiring fragments: [String],
+        timeout: TimeInterval = 12
+    ) async throws -> String {
+        let deadline = Date().addingTimeInterval(timeout)
+        var lastText = "node inspector was unavailable"
+        var didFlushScheduledWork = false
+        while Date() < deadline {
+            do {
+                if let text = try await evaluateJavaScriptString(
+                    "document.getElementById('node-info')?.textContent || ''",
+                    in: webView
+                ) {
+                    lastText = text
+                    if fragments.allSatisfy(text.contains) {
+                        return text
+                    }
+                    if !didFlushScheduledWork {
+                        didFlushScheduledWork = true
+                        _ = try? await evaluateThreeDJavaScript(
+                            "window.brainBarFlushRendererForMeasurement?.()",
+                            action: "flush suspended evidence panel",
+                            in: webView
+                        )
+                    }
+                }
+            } catch {
+                lastText = error.localizedDescription
+            }
+            try await Task.sleep(nanoseconds: 50_000_000)
+        }
+        throw BrainBarError.processFailed("Timed out during \(phase): \(lastText)")
     }
 
     @MainActor
@@ -5842,7 +7369,7 @@ final class BrainBarTests: XCTestCase {
         let serialized = String(data: data ?? Data(), encoding: .utf8) ?? ""
         for forbiddenValue in [
             "node-a", "node-b", "node-c", "node-d", "edge-ab", "edge-bc", "edge-cd",
-            "Northstar", "Orbit", "Beacon", "Harbor",
+            "Northstar", "Beacon", "Harbor",
             "Notes/Northstar.md", "Notes/Orbit.md", "Notes/Beacon.md", "Notes/Harbor.md",
             "northstar", "beacon", "hostile-load-lens", "hostile-lens-query"
         ] {

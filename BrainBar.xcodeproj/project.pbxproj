@@ -42,6 +42,7 @@
 		10000000000000000000012D /* GraphEvidence in Resources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000040 /* GraphEvidence */; };
 		10000000000000000000012E /* AgentActivityFSEventPathDecoderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000041 /* AgentActivityFSEventPathDecoderTests.swift */; };
 		10000000000000000000012F /* Graph2DOfflineRuntimeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000042 /* Graph2DOfflineRuntimeTests.swift */; };
+		100000000000000000000130 /* Graph3DPresentationStateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000043 /* Graph3DPresentationStateTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -92,6 +93,7 @@
 		10000000000000000000002F /* AgentActivityWorkflowTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentActivityWorkflowTests.swift; sourceTree = "<group>"; };
 		100000000000000000000041 /* AgentActivityFSEventPathDecoderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentActivityFSEventPathDecoderTests.swift; sourceTree = "<group>"; };
 		100000000000000000000042 /* Graph2DOfflineRuntimeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Graph2DOfflineRuntimeTests.swift; sourceTree = "<group>"; };
+		100000000000000000000043 /* Graph3DPresentationStateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Graph3DPresentationStateTests.swift; sourceTree = "<group>"; };
 		100000000000000000000040 /* GraphEvidence */ = {isa = PBXFileReference; lastKnownFileType = folder; path = GraphEvidence; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -186,6 +188,7 @@
 				10000000000000000000002F /* AgentActivityWorkflowTests.swift */,
 				100000000000000000000041 /* AgentActivityFSEventPathDecoderTests.swift */,
 				100000000000000000000042 /* Graph2DOfflineRuntimeTests.swift */,
+				100000000000000000000043 /* Graph3DPresentationStateTests.swift */,
 			);
 			path = BrainBarTests;
 			sourceTree = "<group>";
@@ -353,6 +356,7 @@
 				10000000000000000000012C /* AgentActivityWorkflowTests.swift in Sources */,
 				10000000000000000000012E /* AgentActivityFSEventPathDecoderTests.swift in Sources */,
 				10000000000000000000012F /* Graph2DOfflineRuntimeTests.swift in Sources */,
+				100000000000000000000130 /* Graph3DPresentationStateTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
