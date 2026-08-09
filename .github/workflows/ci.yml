@@ -62,4 +62,4 @@ jobs:
           FIXTURE_DIR="$fixture_dir" node -e 'const fs = require("fs"); for (const [name, nodes, edges] of [["inspected-shape", 12547, 29868], ["25k-stress", 25000, 59512]]) { const graph = JSON.parse(fs.readFileSync(`${process.env.FIXTURE_DIR}/${name}.json`, "utf8")); if (graph.nodes.length !== nodes || graph.edges.length !== edges) throw new Error(`${name} count mismatch`); }'
 
       - name: XCTest suite
-        run: xcodebuild test -project BrainBar.xcodeproj -scheme BrainBar -destination 'platform=macOS' CODE_SIGNING_ALLOWED=NO
+        run: xcodebuild test -project BrainBar.xcodeproj -scheme BrainBar -destination 'platform=macOS'
