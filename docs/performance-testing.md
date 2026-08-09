@@ -29,7 +29,7 @@ Capture these metrics separately:
 
 Use content-free fixture names, counts, timing aggregates, and system metadata in diagnostics. Never emit note text, graph labels from a real vault, paths to private vault content, or graph payloads.
 
-Numeric whole-app renderer budgets remain pending owner approval after measurements on the reference host. The existing Graph3D layout benchmark is scoped evidence for its isolated local-node separation routine only; it is not a graph-ready, renderer, memory, or interaction performance result for the full application.
+The provisional v0.10 single-visible-WebView release-review memory ceiling is documented below. The existing Graph3D layout benchmark is scoped evidence for its isolated local-node separation routine only; it is not a graph-ready, renderer, memory, or interaction performance result for the full application.
 
 The approved Module Worker slice uses `threeDLayoutZeroDelayTimerProbeMs` as its primary responsiveness measure. The matched inspected-shape result improved from 1,537 / 1,567.4 ms p50/p95 before the Worker to 20 / 22.6 ms after it (nine measured runs, exact parity), a proven 98.70% median improvement. The 25k supporting run improved from 5,499 / 6,081.6 ms to 35 / 66.6 ms, but its 34.57% after CV is explicitly noisy. Raw evidence is stored in `outputs/layout-worker-baseline.json`, `outputs/layout-worker-after-inspected.json`, and `outputs/layout-worker-after-25k.json`.
 

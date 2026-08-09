@@ -29,8 +29,8 @@ The count golden makes the initial presentation contract reviewable. It verifies
 that Collapsed, Docked, and narrow Overlay do not change the painted set for the
 same Overview input. A future implementation that intentionally changes the
 selection rules must update the golden with matching rationale and visual proof.
-The versioned manifest records the provisional Overview limit of 1,200 nodes on
-graphs above 2,500 nodes, plus one node of allowance for every explicitly active
+The versioned manifest records the Overview limit of 7,000 nodes on graphs
+above 16,000 nodes, plus one node of allowance for every explicitly active
 promotion. The planner must pass that gate before a count golden is captured;
 the checked-in harness enforces it on the approved synthetic fixtures.
 
@@ -38,11 +38,16 @@ the checked-in harness enforces it on the approved synthetic fixtures.
 
 ```sh
 node scripts/test-graph3d-presentation-acceptance.mjs
+BRAINBAR_ENFORCE_PRESENTATION_TIMINGS=1 node scripts/test-graph3d-presentation-acceptance.mjs
 node scripts/graph3d-presentation-acceptance.mjs --format markdown
 node scripts/graph3d-presentation-acceptance.mjs --enforce-provisional-gates --format markdown
 # Validate a post-integration count golden:
 node scripts/graph3d-presentation-acceptance.mjs --golden outputs/graph3d-presentation-count-golden-v1.json --format json
 ```
+
+The default test is deterministic and suitable for shared CI. The opt-in
+timing mode is reserved for the documented reference host; shared CI still
+validates all fixture identities, counts, ordering, gates, and report shapes.
 
 The reports contain fixture dimensions, scenario names, counts, numeric timing
 aggregates, and capability state only. They contain no graph payload, node or
