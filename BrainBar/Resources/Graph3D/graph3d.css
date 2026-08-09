@@ -64,6 +64,14 @@ body {
     linear-gradient(180deg, #050814 0%, #070a13 52%, #05070d 100%);
 }
 
+#stage.is-navigating {
+  cursor: grabbing;
+}
+
+#stage.has-navigation-focus {
+  box-shadow: inset 0 0 0 2px rgba(127, 160, 255, 0.72);
+}
+
 #stage::before {
   content: "";
   position: absolute;
@@ -137,6 +145,43 @@ body {
   border-radius: 12px;
   background: rgba(21, 23, 34, 0.78);
   backdrop-filter: blur(16px) saturate(1.12);
+}
+
+#navigation-hint {
+  position: absolute;
+  left: 16px;
+  bottom: 16px;
+  z-index: 6;
+  padding: 7px 10px;
+  border: 1px solid var(--bb-border);
+  border-radius: 999px;
+  background: rgba(14, 17, 26, 0.72);
+  color: var(--bb-text-muted);
+  font-size: 10px;
+  font-weight: 650;
+  letter-spacing: 0.01em;
+  pointer-events: none;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  transition: opacity 120ms ease;
+}
+
+#navigation-hint span {
+  padding: 0 3px;
+  color: var(--bb-text-faint);
+}
+
+#stage.is-navigating #navigation-hint {
+  opacity: 0.3;
+}
+
+@media (max-width: 720px) {
+  #navigation-hint {
+    max-width: calc(100% - 32px);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
 }
 
 #graph-controls label {

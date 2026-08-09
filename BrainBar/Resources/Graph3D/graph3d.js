@@ -63,6 +63,7 @@ const sidebarToggle = document.getElementById('sidebar-toggle');
 const sidebarResizer = document.getElementById('sidebar-resizer');
 const cameraBackButton = document.getElementById('camera-back');
 const graphStatus = document.getElementById('graph-status');
+const navigationHint = document.getElementById('navigation-hint');
 
 const palette = [
   '#6f89a9', '#b58a58', '#ad6970', '#70a4a0', '#78976c', '#b8a25d',
@@ -147,6 +148,8 @@ const rendererTestMode = new URLSearchParams(window.location.search).get('render
 // compact host viewport. Keep this far below the interactive/manual floor so
 // the fit is governed by the actual graph bounds rather than an arbitrary cap.
 const minimumProgrammaticFitZoom = 0.0001;
+const navigationDragThreshold = 5;
+const keyboardOrbitStep = THREE.MathUtils.degToRad(8);
 
 const pointTexture = createPointTexture();
 
@@ -181,6 +184,14 @@ const state = {
   cameraTransitionFrame: null,
   cameraTransitionToken: 0,
   programmaticCameraDepth: 0,
+  navigationPointerId: null,
+  navigationPointerStartX: 0,
+  navigationPointerStartY: 0,
+  navigationPointerLastX: 0,
+  navigationPointerLastY: 0,
+  navigationPointerRotates: false,
+  navigationPointerDragged: false,
+  suppressSelectionClickUntil: 0,
   historySuppressed: false,
   reduceMotion: prefersReducedMotion,
   degreeByNode: new Map(),
@@ -447,6 +458,11 @@ function initScene() {
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
   renderer.setClearColor('#060912', 1);
   renderer.domElement.classList.add('webgl-hit-layer');
+  renderer.domElement.tabIndex = 0;
+  renderer.domElement.setAttribute(
+    'aria-label',
+    'Interactive 3D graph. Drag to orbit, Shift-drag to pan, scroll to zoom, or use the arrow keys to orbit.'
+  );
   stage.prepend(renderer.domElement);
 
   // Orthographic projection made an otherwise spatial layout read as a flat
@@ -460,9 +476,12 @@ function initScene() {
   controls.enableDamping = false;
   controls.enablePan = true;
   controls.enableZoom = true;
-  controls.enableRotate = true;
+  // BrainBar owns primary-pointer orbit below so WebKit drag behavior is
+  // deterministic and can never collapse into a node click. OrbitControls
+  // continues to provide modifier/right-button pan and wheel dolly.
+  controls.enableRotate = false;
   controls.zoomToCursor = true;
-  controls.rotateSpeed = 0.74;
+  controls.rotateSpeed = 0.96;
   controls.zoomSpeed = 1.08;
   controls.panSpeed = 0.82;
   // Keep the initial oblique reading available and prevent accidental flips
@@ -1741,7 +1760,7 @@ function rebuildPresentationIndex() {
 }
 
 function presentationSafeRegions() {
-  return [hud, state.sidebarState === 'overlay' ? sidebar : null]
+  return [hud, navigationHint, state.sidebarState === 'overlay' ? sidebar : null]
     .map(stageClientRectForElement)
     .filter(Boolean);
 }
@@ -6084,11 +6103,85 @@ function wireEvents() {
     resizeDockedSidebar(state.sidebarWidth + (event.key === 'ArrowLeft' ? -12 : 12), { reframe: true });
   });
   cameraBackButton?.addEventListener('click', restorePreviousCameraState);
-  renderer?.domElement?.addEventListener('pointerdown', cancelCameraTransition);
+  renderer?.domElement?.addEventListener('focus', () => stage.classList.add('has-navigation-focus'));
+  renderer?.domElement?.addEventListener('blur', () => stage.classList.remove('has-navigation-focus'));
+  renderer?.domElement?.addEventListener('pointerdown', (event) => {
+    cancelCameraTransition();
+    renderer.domElement.focus({ preventScroll: true });
+    const primaryMouseOrbit = event.pointerType !== 'touch' && event.button === 0 &&
+      !event.shiftKey && !event.ctrlKey && !event.metaKey;
+    const primaryTouchOrbit = event.pointerType === 'touch' && event.isPrimary;
+    const modifierPan = event.pointerType !== 'touch' && (
+      (event.button === 0 && (event.shiftKey || event.ctrlKey || event.metaKey)) ||
+      event.button === 2
+    );
+    if (!primaryMouseOrbit && !primaryTouchOrbit && !modifierPan) return;
+    state.navigationPointerId = event.pointerId;
+    state.navigationPointerStartX = event.clientX;
+    state.navigationPointerStartY = event.clientY;
+    state.navigationPointerLastX = event.clientX;
+    state.navigationPointerLastY = event.clientY;
+    state.navigationPointerRotates = primaryMouseOrbit || primaryTouchOrbit;
+    state.navigationPointerDragged = false;
+    stage.classList.add('is-navigating');
+  });
+  renderer?.domElement?.addEventListener('pointermove', (event) => {
+    if (state.navigationPointerId !== event.pointerId) return;
+    const distance = Math.hypot(
+      event.clientX - state.navigationPointerStartX,
+      event.clientY - state.navigationPointerStartY
+    );
+    const wasDragged = state.navigationPointerDragged;
+    if (!wasDragged && distance >= navigationDragThreshold) {
+      state.navigationPointerDragged = true;
+    }
+    if (state.navigationPointerDragged && state.navigationPointerRotates) {
+      const originX = wasDragged ? state.navigationPointerLastX : state.navigationPointerStartX;
+      const originY = wasDragged ? state.navigationPointerLastY : state.navigationPointerStartY;
+      const height = Math.max(renderer.domElement.clientHeight, 1);
+      orbitManualCamera(
+        -2 * Math.PI * (event.clientX - originX) / height * controls.rotateSpeed,
+        2 * Math.PI * (event.clientY - originY) / height * controls.rotateSpeed
+      );
+      event.preventDefault();
+    }
+    state.navigationPointerLastX = event.clientX;
+    state.navigationPointerLastY = event.clientY;
+  });
+  const finishPointerNavigation = (event) => {
+    if (state.navigationPointerId !== event.pointerId) return;
+    if (state.navigationPointerDragged) {
+      state.suppressSelectionClickUntil = performance.now() + 180;
+    }
+    state.navigationPointerId = null;
+    state.navigationPointerRotates = false;
+    state.navigationPointerDragged = false;
+    stage.classList.remove('is-navigating');
+  };
+  renderer?.domElement?.addEventListener('pointerup', finishPointerNavigation);
+  renderer?.domElement?.addEventListener('pointercancel', finishPointerNavigation);
   renderer?.domElement?.addEventListener('wheel', cancelCameraTransition, { passive: true });
+  renderer?.domElement?.addEventListener('wheel', (event) => {
+    if (Math.abs(event.deltaX) <= Math.max(2, Math.abs(event.deltaY) * 1.2)) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    orbitManualCamera(event.deltaX * 0.0024, 0);
+  }, { capture: true, passive: false });
+  renderer?.domElement?.addEventListener('keydown', (event) => {
+    const direction = event.shiftKey ? 2 : 1;
+    const orbit = {
+      ArrowLeft: [-keyboardOrbitStep * direction, 0],
+      ArrowRight: [keyboardOrbitStep * direction, 0],
+      ArrowUp: [0, -keyboardOrbitStep * direction],
+      ArrowDown: [0, keyboardOrbitStep * direction]
+    }[event.key];
+    if (!orbit) return;
+    event.preventDefault();
+    orbitManualCamera(orbit[0], orbit[1]);
+  });
   renderer?.domElement?.addEventListener('pointermove', (event) => {
     markLivingInteraction();
-    schedulePointerHitTest(event);
+    if (!state.navigationPointerDragged) schedulePointerHitTest(event);
   });
 
   renderer?.domElement?.addEventListener('pointerleave', () => {
@@ -6110,6 +6203,10 @@ function wireEvents() {
 
   renderer?.domElement?.addEventListener('click', (event) => {
     markLivingInteraction();
+    if (performance.now() <= state.suppressSelectionClickUntil) {
+      event.preventDefault();
+      return;
+    }
     const node = nodeAtEvent(event);
     const edge = node ? null : edgeAtEvent(event);
     if (node) {
@@ -6172,6 +6269,28 @@ function wireEvents() {
     event.preventDefault();
     reportDiagnostic('WebGL context lost', true);
   });
+}
+
+function orbitManualCamera(deltaAzimuth, deltaPolar) {
+  if (!camera || !controls) return false;
+  cancelCameraTransition();
+  const offset = camera.position.clone().sub(controls.target);
+  const spherical = new THREE.Spherical().setFromVector3(offset);
+  spherical.theta += deltaAzimuth;
+  spherical.phi = clamp(
+    spherical.phi + deltaPolar,
+    controls.minPolarAngle,
+    controls.maxPolarAngle
+  );
+  spherical.makeSafe();
+  camera.position.copy(controls.target).add(offset.setFromSpherical(spherical));
+  camera.lookAt(controls.target);
+  controls.update();
+  state.cameraPreset = 'manual';
+  markVisualCacheDirty();
+  requestRender();
+  scheduleGraphSessionState();
+  return true;
 }
 
 function schedulePointerHitTest(event) {

@@ -6212,6 +6212,94 @@ final class BrainBarTests: XCTestCase {
     }
 
     @MainActor
+    func testGraph3DOrbitNavigationSupportsDragTrackpadAndKeyboard() async throws {
+        let graphDirectory = try rendererFixtureGraphDirectory()
+        defer { removeTemporaryDirectory(graphDirectory.deletingLastPathComponent()) }
+        let threeD = try makeThreeDLayoutResponsivenessWebView(graphDirectory: graphDirectory)
+        let host = RendererWebViewHost(webView: threeD.webView)
+        defer { host.close(messageHandlerNames: ["brainBarNodeAction", "brainBarGraphDiagnostic"]) }
+
+        try await prepareThreeDGraph(threeD, graphDirectory: graphDirectory)
+        try await waitForRendererFunction("brainBarLoadGraph", in: threeD.webView, phase: "3D orbit navigation API")
+        let serialized = try await callAsyncJavaScriptString(
+            """
+            const response = await fetch(\(Graph3DWebView.jsStringLiteral(try graphSchemeURL(for: threeD.coordinator))));
+            const graph = await response.json();
+            await window.brainBarLoadGraph(graph, 'all', 813);
+            await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+            const canvas = document.querySelector('#stage canvas.webgl-hit-layer');
+            const camera = () => window.brainBarGraphSessionSnapshot().cameraState;
+            const fingerprint = () => window.brainBarPresentationStateForTesting().coordinateFingerprint;
+            const initial = camera();
+            const initialFingerprint = fingerprint();
+
+            canvas.focus();
+            canvas.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'ArrowRight' }));
+            await new Promise((resolve) => requestAnimationFrame(resolve));
+            const keyboard = camera();
+
+            canvas.dispatchEvent(new WheelEvent('wheel', { bubbles: true, cancelable: true, deltaX: 120, deltaY: 0 }));
+            await new Promise((resolve) => requestAnimationFrame(resolve));
+            const trackpad = camera();
+
+            let pointerError = '';
+            try {
+              canvas.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0, buttons: 1, pointerId: 91, pointerType: 'mouse', clientX: 220, clientY: 220 }));
+              canvas.dispatchEvent(new PointerEvent('pointermove', { bubbles: true, button: 0, buttons: 1, pointerId: 91, pointerType: 'mouse', clientX: 340, clientY: 270 }));
+              canvas.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, button: 0, buttons: 0, pointerId: 91, pointerType: 'mouse', clientX: 340, clientY: 270 }));
+              canvas.dispatchEvent(new MouseEvent('click', { bubbles: true, button: 0, clientX: 340, clientY: 270 }));
+            } catch (error) {
+              pointerError = String(error?.message || error);
+            }
+            await new Promise((resolve) => requestAnimationFrame(resolve));
+            const drag = camera();
+            const session = window.brainBarGraphSessionSnapshot();
+            return JSON.stringify({
+              initial,
+              keyboard,
+              trackpad,
+              drag,
+              pointerError,
+              selectedNodeID: session.selectedNodeID || null,
+              preset: drag.preset,
+              coordinateFingerprintBefore: initialFingerprint,
+              coordinateFingerprintAfter: fingerprint(),
+              tabIndex: canvas.tabIndex,
+              canvasLabel: canvas.getAttribute('aria-label') || '',
+              hint: document.getElementById('navigation-hint')?.textContent?.replace(/\\s+/g, ' ').trim() || ''
+            });
+            """,
+            in: threeD.webView
+        )
+        let result = try XCTUnwrap(
+            try JSONSerialization.jsonObject(with: Data(try XCTUnwrap(serialized).utf8)) as? [String: Any]
+        )
+
+        func vector(_ camera: [String: Any], key: String) throws -> [Double] {
+            let value = try XCTUnwrap(camera[key] as? [String: Any])
+            return try ["x", "y", "z"].map { key in
+                try XCTUnwrap((value[key] as? NSNumber)?.doubleValue)
+            }
+        }
+
+        let initial = try XCTUnwrap(result["initial"] as? [String: Any])
+        let keyboard = try XCTUnwrap(result["keyboard"] as? [String: Any])
+        let trackpad = try XCTUnwrap(result["trackpad"] as? [String: Any])
+        let drag = try XCTUnwrap(result["drag"] as? [String: Any])
+        XCTAssertEqual(result["pointerError"] as? String, "")
+        XCTAssertNotEqual(try vector(initial, key: "position"), try vector(keyboard, key: "position"))
+        XCTAssertNotEqual(try vector(keyboard, key: "position"), try vector(trackpad, key: "position"))
+        XCTAssertNotEqual(try vector(trackpad, key: "position"), try vector(drag, key: "position"))
+        XCTAssertEqual(try vector(initial, key: "target"), try vector(drag, key: "target"))
+        XCTAssertTrue(result["selectedNodeID"] is NSNull)
+        XCTAssertEqual(result["preset"] as? String, "manual")
+        XCTAssertEqual(result["coordinateFingerprintBefore"] as? String, result["coordinateFingerprintAfter"] as? String)
+        XCTAssertEqual(result["tabIndex"] as? Int, 0)
+        XCTAssertTrue((result["canvasLabel"] as? String)?.contains("Drag to orbit") == true)
+        XCTAssertTrue((result["hint"] as? String)?.contains("Shift-drag to pan") == true)
+    }
+
+    @MainActor
     func testGraph3DAccessibilityAuditUsesPublicFixture() async throws {
         let graphDirectory = try rendererFixtureGraphDirectory()
         defer { removeTemporaryDirectory(graphDirectory.deletingLastPathComponent()) }
