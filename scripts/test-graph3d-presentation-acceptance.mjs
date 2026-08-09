@@ -48,11 +48,9 @@ for (const fixture of report.fixtures) {
   assert.equal(fixture.indexBuildMs.samples.length, 9);
   assert.ok(fixture.indexBuildMs.samples.every(Number.isFinite));
   // Index construction is a one-time readiness phase; interaction re-plans below
-  // remain the binding 25k responsiveness check. Keep generous host-noise headroom.
+  // and hosted WebKit feedback below are the release signals. Keep generous
+  // shared-runner headroom here while still catching algorithmic regressions.
   assert.ok(fixture.indexBuildMs.p95 < 250, `${fixture.name} index build p95 must stay below 250ms with renderer indexes`);
-  if (fixture.nodeCount === 25000) {
-    assert.ok(fixture.indexBuildMs.p95 < 120, `25k prepared presentation index p95 must stay below 120ms`);
-  }
   const byName = new Map(fixture.scenarios.map((scenario) => [scenario.scenario, scenario]));
   const collapsed = byName.get('overview-collapsed');
   const docked = byName.get('overview-docked');
