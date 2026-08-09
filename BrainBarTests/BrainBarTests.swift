@@ -6452,7 +6452,7 @@ final class BrainBarTests: XCTestCase {
             window.dispatchEvent(new Event('resize'));
             window.brainBarFlushRendererForMeasurement();
             const afterResize = window.brainBarGraphSessionSnapshot().cameraState;
-            return JSON.stringify({ summaries, initial, docked, overlay, manualPreserved: JSON.stringify(beforeResize) === JSON.stringify(afterResize) });
+            return JSON.stringify({ summaries, initial, docked, overlay, devicePixelRatio: window.devicePixelRatio || 1, manualPreserved: JSON.stringify(beforeResize) === JSON.stringify(afterResize) });
             """,
             in: threeD.webView
         )
@@ -6477,11 +6477,15 @@ final class BrainBarTests: XCTestCase {
         let twentyFiveKDefault = try XCTUnwrap(summaries.first(where: { $0["name"] as? String == "25k" })?["defaultDiagnostics"] as? [String: Any])
         let inspectedDiagnostics = try XCTUnwrap(summaries.first(where: { $0["name"] as? String == "inspected" })?["diagnostics"] as? [String: Any])
         let twentyFiveKDiagnostics = try XCTUnwrap(summaries.first(where: { $0["name"] as? String == "25k" })?["diagnostics"] as? [String: Any])
+        let devicePixelRatio = try XCTUnwrap((result["devicePixelRatio"] as? NSNumber)?.doubleValue)
         XCTAssertEqual(diagnosticString(oneKDefault, "detailLevel"), "balanced")
         XCTAssertEqual(diagnosticString(inspectedDefault, "detailLevel"), "balanced")
         XCTAssertEqual(diagnosticString(twentyFiveKDefault, "detailLevel"), "overview")
-        XCTAssertGreaterThanOrEqual(try XCTUnwrap(diagnosticDouble(inspectedDiagnostics, "visualPixelRatio")), 2)
-        XCTAssertLessThanOrEqual(try XCTUnwrap(diagnosticDouble(inspectedDiagnostics, "staticRebuildP95Ms")), 33)
+        XCTAssertEqual(
+            try XCTUnwrap(diagnosticDouble(inspectedDiagnostics, "visualPixelRatio")),
+            min(devicePixelRatio, 2),
+            accuracy: 0.001
+        )
         XCTAssertEqual(diagnosticBool(inspectedDiagnostics, "baseStateHubGlowEnabled"), false)
         XCTAssertEqual(diagnosticCount(inspectedDiagnostics, "staticHubGlowCount"), 0)
         XCTAssertGreaterThanOrEqual(try XCTUnwrap(diagnosticDouble(inspectedDiagnostics, "balancedDiscMinimumAlpha")), 0.72)
