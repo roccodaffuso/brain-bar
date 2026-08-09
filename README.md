@@ -35,6 +35,7 @@ It does not vendor Graphify, upload vault content, rewrite generated Graphify fi
 - **Change Radar.** Local rolling snapshots and a deterministic Change Inbox explain what changed after a successful refresh.
 - **Agent Activity and Workflows.** Event-driven watching, incremental metadata-only history, privacy controls, explicit-ID workflow trails, and pending-refresh paths.
 - **Guided Maintenance.** Unified evidence inspectors and copy-only Graph Check proposals for deterministic, reviewable maintenance without Markdown mutation.
+- **Spatial 3D Explorer.** Perspective community islands, progressive detail, crisp Retina nodes, bounded labels, semantic camera views, and direct orbit/pan/zoom navigation make large graphs readable without dropping queryable identities.
 - **Notarized releases.** Public GitHub Releases ship as Developer ID signed, Apple-notarized `BrainBar.dmg` files.
 
 See [CHANGELOG.md](CHANGELOG.md) for the full release history.

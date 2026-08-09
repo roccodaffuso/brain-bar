@@ -18,13 +18,13 @@
           "queryableNodeCount": 1000,
           "queryableEdgeCount": 2380,
           "paintedNodeCount": 1000,
-          "paintedEdgeCount": 1800,
+          "paintedEdgeCount": 2380,
           "communityAnchorCount": 10,
           "persistentLabelCount": 8,
           "activePromotionNodeCount": 0,
           "overviewPaintBudget": {
             "status": "not-applicable",
-            "budget": 1200,
+            "budget": 7000,
             "allowance": 0
           }
         },
@@ -38,13 +38,13 @@
           "queryableNodeCount": 1000,
           "queryableEdgeCount": 2380,
           "paintedNodeCount": 1000,
-          "paintedEdgeCount": 1800,
+          "paintedEdgeCount": 2380,
           "communityAnchorCount": 10,
           "persistentLabelCount": 8,
           "activePromotionNodeCount": 0,
           "overviewPaintBudget": {
             "status": "not-applicable",
-            "budget": 1200,
+            "budget": 7000,
             "allowance": 0
           }
         },
@@ -58,13 +58,13 @@
           "queryableNodeCount": 1000,
           "queryableEdgeCount": 2380,
           "paintedNodeCount": 1000,
-          "paintedEdgeCount": 1800,
+          "paintedEdgeCount": 2380,
           "communityAnchorCount": 10,
           "persistentLabelCount": 14,
           "activePromotionNodeCount": 1,
           "overviewPaintBudget": {
             "status": "not-applicable",
-            "budget": 1200,
+            "budget": 7000,
             "allowance": 1
           }
         },
@@ -78,13 +78,13 @@
           "queryableNodeCount": 1000,
           "queryableEdgeCount": 2380,
           "paintedNodeCount": 1000,
-          "paintedEdgeCount": 1800,
+          "paintedEdgeCount": 2380,
           "communityAnchorCount": 10,
           "persistentLabelCount": 14,
           "activePromotionNodeCount": 1,
           "overviewPaintBudget": {
             "status": "not-applicable",
-            "budget": 1200,
+            "budget": 7000,
             "allowance": 1
           }
         },
@@ -98,13 +98,13 @@
           "queryableNodeCount": 1000,
           "queryableEdgeCount": 2380,
           "paintedNodeCount": 1000,
-          "paintedEdgeCount": 1800,
+          "paintedEdgeCount": 2380,
           "communityAnchorCount": 10,
           "persistentLabelCount": 14,
           "activePromotionNodeCount": 5,
           "overviewPaintBudget": {
             "status": "not-applicable",
-            "budget": 1200,
+            "budget": 7000,
             "allowance": 5
           }
         },
@@ -118,13 +118,13 @@
           "queryableNodeCount": 1000,
           "queryableEdgeCount": 2380,
           "paintedNodeCount": 1000,
-          "paintedEdgeCount": 1800,
+          "paintedEdgeCount": 2380,
           "communityAnchorCount": 10,
           "persistentLabelCount": 14,
           "activePromotionNodeCount": 7,
           "overviewPaintBudget": {
             "status": "not-applicable",
-            "budget": 1200,
+            "budget": 7000,
             "allowance": 7
           }
         },
@@ -138,13 +138,13 @@
           "queryableNodeCount": 1000,
           "queryableEdgeCount": 2380,
           "paintedNodeCount": 1000,
-          "paintedEdgeCount": 1800,
+          "paintedEdgeCount": 2380,
           "communityAnchorCount": 10,
           "persistentLabelCount": 8,
           "activePromotionNodeCount": 0,
           "overviewPaintBudget": {
             "status": "not-applicable",
-            "budget": 1200,
+            "budget": 7000,
             "allowance": 0
           }
         },
@@ -158,13 +158,13 @@
           "queryableNodeCount": 1000,
           "queryableEdgeCount": 2380,
           "paintedNodeCount": 1000,
-          "paintedEdgeCount": 1800,
+          "paintedEdgeCount": 2380,
           "communityAnchorCount": 10,
           "persistentLabelCount": 8,
           "activePromotionNodeCount": 0,
           "overviewPaintBudget": {
             "status": "not-applicable",
-            "budget": 1200,
+            "budget": 7000,
             "allowance": 0
           }
         }
@@ -184,17 +184,17 @@
           "reduceMotion": false,
           "queryableNodeCount": 12547,
           "queryableEdgeCount": 29868,
-          "paintedNodeCount": 1200,
-          "paintedEdgeCount": 1800,
+          "paintedNodeCount": 7000,
+          "paintedEdgeCount": 7000,
           "communityAnchorCount": 64,
           "persistentLabelCount": 8,
           "activePromotionNodeCount": 0,
           "overviewPaintBudget": {
             "status": "pass",
-            "budget": 1200,
+            "budget": 7000,
             "allowance": 0,
-            "limit": 1200,
-            "observed": 1200
+            "limit": 7000,
+            "observed": 7000
           }
         },
         {
@@ -206,17 +206,17 @@
           "reduceMotion": false,
           "queryableNodeCount": 12547,
           "queryableEdgeCount": 29868,
-          "paintedNodeCount": 1200,
-          "paintedEdgeCount": 1800,
+          "paintedNodeCount": 7000,
+          "paintedEdgeCount": 7000,
           "communityAnchorCount": 64,
           "persistentLabelCount": 8,
           "activePromotionNodeCount": 0,
           "overviewPaintBudget": {
             "status": "pass",
-            "budget": 1200,
+            "budget": 7000,
             "allowance": 0,
-            "limit": 1200,
-            "observed": 1200
+            "limit": 7000,
+            "observed": 7000
           }
         },
         {
@@ -228,17 +228,17 @@
           "reduceMotion": false,
           "queryableNodeCount": 12547,
           "queryableEdgeCount": 29868,
-          "paintedNodeCount": 1201,
-          "paintedEdgeCount": 1800,
+          "paintedNodeCount": 7001,
+          "paintedEdgeCount": 7000,
           "communityAnchorCount": 64,
           "persistentLabelCount": 14,
           "activePromotionNodeCount": 1,
           "overviewPaintBudget": {
             "status": "pass",
-            "budget": 1200,
+            "budget": 7000,
             "allowance": 1,
-            "limit": 1201,
-            "observed": 1201
+            "limit": 7001,
+            "observed": 7001
           }
         },
         {
@@ -250,17 +250,17 @@
           "reduceMotion": false,
           "queryableNodeCount": 12547,
           "queryableEdgeCount": 29868,
-          "paintedNodeCount": 1201,
-          "paintedEdgeCount": 1800,
+          "paintedNodeCount": 7001,
+          "paintedEdgeCount": 7000,
           "communityAnchorCount": 64,
           "persistentLabelCount": 14,
           "activePromotionNodeCount": 1,
           "overviewPaintBudget": {
             "status": "pass",
-            "budget": 1200,
+            "budget": 7000,
             "allowance": 1,
-            "limit": 1201,
-            "observed": 1201
+            "limit": 7001,
+            "observed": 7001
           }
         },
         {
@@ -272,17 +272,17 @@
           "reduceMotion": false,
           "queryableNodeCount": 12547,
           "queryableEdgeCount": 29868,
-          "paintedNodeCount": 1205,
-          "paintedEdgeCount": 1800,
+          "paintedNodeCount": 7005,
+          "paintedEdgeCount": 7000,
           "communityAnchorCount": 64,
           "persistentLabelCount": 14,
           "activePromotionNodeCount": 5,
           "overviewPaintBudget": {
             "status": "pass",
-            "budget": 1200,
+            "budget": 7000,
             "allowance": 5,
-            "limit": 1205,
-            "observed": 1205
+            "limit": 7005,
+            "observed": 7005
           }
         },
         {
@@ -294,17 +294,17 @@
           "reduceMotion": false,
           "queryableNodeCount": 12547,
           "queryableEdgeCount": 29868,
-          "paintedNodeCount": 1201,
-          "paintedEdgeCount": 1800,
+          "paintedNodeCount": 7001,
+          "paintedEdgeCount": 7000,
           "communityAnchorCount": 64,
           "persistentLabelCount": 14,
           "activePromotionNodeCount": 7,
           "overviewPaintBudget": {
             "status": "pass",
-            "budget": 1200,
+            "budget": 7000,
             "allowance": 7,
-            "limit": 1207,
-            "observed": 1201
+            "limit": 7007,
+            "observed": 7001
           }
         },
         {
@@ -316,17 +316,17 @@
           "reduceMotion": false,
           "queryableNodeCount": 12547,
           "queryableEdgeCount": 29868,
-          "paintedNodeCount": 1200,
-          "paintedEdgeCount": 1800,
+          "paintedNodeCount": 7000,
+          "paintedEdgeCount": 7000,
           "communityAnchorCount": 64,
           "persistentLabelCount": 8,
           "activePromotionNodeCount": 0,
           "overviewPaintBudget": {
             "status": "pass",
-            "budget": 1200,
+            "budget": 7000,
             "allowance": 0,
-            "limit": 1200,
-            "observed": 1200
+            "limit": 7000,
+            "observed": 7000
           }
         },
         {
@@ -338,17 +338,17 @@
           "reduceMotion": true,
           "queryableNodeCount": 12547,
           "queryableEdgeCount": 29868,
-          "paintedNodeCount": 1200,
-          "paintedEdgeCount": 1800,
+          "paintedNodeCount": 7000,
+          "paintedEdgeCount": 7000,
           "communityAnchorCount": 64,
           "persistentLabelCount": 8,
           "activePromotionNodeCount": 0,
           "overviewPaintBudget": {
             "status": "pass",
-            "budget": 1200,
+            "budget": 7000,
             "allowance": 0,
-            "limit": 1200,
-            "observed": 1200
+            "limit": 7000,
+            "observed": 7000
           }
         }
       ]
@@ -367,17 +367,17 @@
           "reduceMotion": false,
           "queryableNodeCount": 25000,
           "queryableEdgeCount": 59512,
-          "paintedNodeCount": 1200,
-          "paintedEdgeCount": 1800,
+          "paintedNodeCount": 7000,
+          "paintedEdgeCount": 7000,
           "communityAnchorCount": 100,
           "persistentLabelCount": 8,
           "activePromotionNodeCount": 0,
           "overviewPaintBudget": {
             "status": "pass",
-            "budget": 1200,
+            "budget": 7000,
             "allowance": 0,
-            "limit": 1200,
-            "observed": 1200
+            "limit": 7000,
+            "observed": 7000
           }
         },
         {
@@ -389,17 +389,17 @@
           "reduceMotion": false,
           "queryableNodeCount": 25000,
           "queryableEdgeCount": 59512,
-          "paintedNodeCount": 1200,
-          "paintedEdgeCount": 1800,
+          "paintedNodeCount": 7000,
+          "paintedEdgeCount": 7000,
           "communityAnchorCount": 100,
           "persistentLabelCount": 8,
           "activePromotionNodeCount": 0,
           "overviewPaintBudget": {
             "status": "pass",
-            "budget": 1200,
+            "budget": 7000,
             "allowance": 0,
-            "limit": 1200,
-            "observed": 1200
+            "limit": 7000,
+            "observed": 7000
           }
         },
         {
@@ -411,17 +411,17 @@
           "reduceMotion": false,
           "queryableNodeCount": 25000,
           "queryableEdgeCount": 59512,
-          "paintedNodeCount": 1201,
-          "paintedEdgeCount": 1800,
+          "paintedNodeCount": 7001,
+          "paintedEdgeCount": 7000,
           "communityAnchorCount": 100,
           "persistentLabelCount": 14,
           "activePromotionNodeCount": 1,
           "overviewPaintBudget": {
             "status": "pass",
-            "budget": 1200,
+            "budget": 7000,
             "allowance": 1,
-            "limit": 1201,
-            "observed": 1201
+            "limit": 7001,
+            "observed": 7001
           }
         },
         {
@@ -433,17 +433,17 @@
           "reduceMotion": false,
           "queryableNodeCount": 25000,
           "queryableEdgeCount": 59512,
-          "paintedNodeCount": 1201,
-          "paintedEdgeCount": 1800,
+          "paintedNodeCount": 7001,
+          "paintedEdgeCount": 7000,
           "communityAnchorCount": 100,
           "persistentLabelCount": 14,
           "activePromotionNodeCount": 1,
           "overviewPaintBudget": {
             "status": "pass",
-            "budget": 1200,
+            "budget": 7000,
             "allowance": 1,
-            "limit": 1201,
-            "observed": 1201
+            "limit": 7001,
+            "observed": 7001
           }
         },
         {
@@ -455,17 +455,17 @@
           "reduceMotion": false,
           "queryableNodeCount": 25000,
           "queryableEdgeCount": 59512,
-          "paintedNodeCount": 1205,
-          "paintedEdgeCount": 1800,
+          "paintedNodeCount": 7005,
+          "paintedEdgeCount": 7000,
           "communityAnchorCount": 100,
           "persistentLabelCount": 14,
           "activePromotionNodeCount": 5,
           "overviewPaintBudget": {
             "status": "pass",
-            "budget": 1200,
+            "budget": 7000,
             "allowance": 5,
-            "limit": 1205,
-            "observed": 1205
+            "limit": 7005,
+            "observed": 7005
           }
         },
         {
@@ -477,17 +477,17 @@
           "reduceMotion": false,
           "queryableNodeCount": 25000,
           "queryableEdgeCount": 59512,
-          "paintedNodeCount": 1201,
-          "paintedEdgeCount": 1800,
+          "paintedNodeCount": 7001,
+          "paintedEdgeCount": 7000,
           "communityAnchorCount": 100,
           "persistentLabelCount": 14,
           "activePromotionNodeCount": 7,
           "overviewPaintBudget": {
             "status": "pass",
-            "budget": 1200,
+            "budget": 7000,
             "allowance": 7,
-            "limit": 1207,
-            "observed": 1201
+            "limit": 7007,
+            "observed": 7001
           }
         },
         {
@@ -499,17 +499,17 @@
           "reduceMotion": false,
           "queryableNodeCount": 25000,
           "queryableEdgeCount": 59512,
-          "paintedNodeCount": 1200,
-          "paintedEdgeCount": 1800,
+          "paintedNodeCount": 7000,
+          "paintedEdgeCount": 7000,
           "communityAnchorCount": 100,
           "persistentLabelCount": 8,
           "activePromotionNodeCount": 0,
           "overviewPaintBudget": {
             "status": "pass",
-            "budget": 1200,
+            "budget": 7000,
             "allowance": 0,
-            "limit": 1200,
-            "observed": 1200
+            "limit": 7000,
+            "observed": 7000
           }
         },
         {
@@ -521,17 +521,17 @@
           "reduceMotion": true,
           "queryableNodeCount": 25000,
           "queryableEdgeCount": 59512,
-          "paintedNodeCount": 1200,
-          "paintedEdgeCount": 1800,
+          "paintedNodeCount": 7000,
+          "paintedEdgeCount": 7000,
           "communityAnchorCount": 100,
           "persistentLabelCount": 8,
           "activePromotionNodeCount": 0,
           "overviewPaintBudget": {
             "status": "pass",
-            "budget": 1200,
+            "budget": 7000,
             "allowance": 0,
-            "limit": 1200,
-            "observed": 1200
+            "limit": 7000,
+            "observed": 7000
           }
         }
       ]

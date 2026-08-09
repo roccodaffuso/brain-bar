@@ -1,15 +1,15 @@
 # BrainBar 3D Visual and Spatial Redesign
 
-Status: implemented and visually accepted for local preview
-Product scope: post-0.10 BrainBar 3D Focus Window  
-Decision state: implementation boundary accepted
+Status: implemented and owner-accepted for the v0.10 release candidate
+Product scope: BrainBar v0.10 3D Focus Window
+Decision state: release-review boundary accepted
 Last updated: 2026-08-09
 
 ## Executive summary
 
 BrainBar's 3D graph is functionally mature, complete, deterministic, and performant enough for the current large-graph contract. Its main weakness is now visual: a large vault is presented as a dense, uniformly weighted mass of nodes and edges. The renderer communicates that the graph is large, but it does not communicate its structure quickly enough.
 
-This redesign will turn the graph from a single dense cloud into a legible spatial system built around community islands, progressive detail, strong focus states, restrained edge rendering, intentional camera framing, and a collapsible context panel.
+This redesign turns the graph from a single dense cloud into a legible spatial system built around community islands, progressive detail, strong focus states, restrained edge rendering, intentional camera framing, and a collapsible context panel.
 
 The redesign must not weaken the contracts established by Milestones 0–5:
 
@@ -811,7 +811,7 @@ Perspective is required to avoid a flat first impression. Camera framing, range 
 
 ## 23. Decisions resolved here
 
-- The redesign is post-0.10 and does not block the current release candidate.
+- The original plan placed the redesign after v0.10. Because v0.10 was not yet public, the owner accepted folding the verified redesign into the first v0.10 release candidate on 2026-08-09.
 - The default 3D renderer uses a bounded 48° perspective projection and an oblique Overview camera.
 - The spatial metaphor is community islands/constellations.
 - Progressive detail affects painting, never queryability.
@@ -870,7 +870,7 @@ Sizes are relative implementation complexity, not calendar estimates. Each slice
 
 ### 27.1 Release separation
 
-The redesign must not be implemented on the 0.10 release-candidate branch. After 0.10 is accepted or its release boundary is otherwise resolved, create a dedicated branch such as:
+The redesign was implemented on a dedicated branch to keep its evidence separate from the original v0.10 release-candidate work. On 2026-08-09 the owner chose to include the accepted branch in the first public v0.10 release rather than publish an immediately superseded build. The dedicated branch is:
 
 `codex/graph3d-visual-spatial-redesign`
 

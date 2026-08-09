@@ -24,6 +24,15 @@ jobs:
           node --check BrainBar/Resources/Graph2D/brainbar-graph-runtime.js
           node --check BrainBar/Resources/Graph3D/graph3d.js
           node scripts/test-graph-runtime.mjs
+          node scripts/test-large-graph-fixtures.mjs
+          node scripts/test-graph-evidence.mjs
+          node scripts/test-renderer-measurement-utils.mjs
+          node scripts/test-graph3d-community-layout.mjs
+          node scripts/test-graph3d-presentation.mjs
+          node scripts/test-graph3d-presentation-acceptance.mjs
+          node scripts/test-graph3d-visual-capture.mjs
+          node scripts/test-graph3d-whole-renderer-memory-evidence.mjs
+          node scripts/audit-graph3d-accessibility.mjs
 
       - name: Test
         run: |

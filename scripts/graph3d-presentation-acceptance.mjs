@@ -296,7 +296,7 @@ export async function buildAcceptanceReport({ fixtureNames = measuredFixtureName
     provisionalGates: {
       overviewPaintedNodeLimit: provisionalOverviewNodeBudget,
       overviewPromotionAllowance: 'one additional painted node per active promoted identity',
-      state: 'provisional; owner approval required before merge'
+      state: 'accepted for v0.10 release review'
     },
     runtimeRequirements: {
       diagnostics: requiredRuntimeDiagnostics,

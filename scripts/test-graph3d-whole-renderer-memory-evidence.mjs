@@ -30,10 +30,18 @@ assert.ok(familyParts.every((value) => Number.isInteger(value) && value > 0));
 assert.equal(familyParts.reduce((sum, value) => sum + value, 0), parts.family);
 assert.equal(Number((parts.family / (1024 * 1024)).toFixed(2)), report.singleFocusedWebView.familyPhysicalFootprintMiB);
 assert.equal(report.singleFocusedWebView.measurementScope, 'maximum-sampled-physical-footprint');
+assert.deepEqual(report.releaseReviewBudget, {
+  classification: 'provisional-single-view-maximum-sampled-family-physical-footprint',
+  referenceHostCeilingMiB: 900,
+  observedMiB: 788.89,
+  headroomMiB: 111.11,
+  passed: true,
+  scope: 'one-focused-visible-webview-on-the-reference-host'
+});
 assert.equal(report.harnessStressUpperBound.maximumConcurrentFamilySampleBytes, 3196977184);
 assert.equal(report.harnessStressUpperBound.maximumConcurrentFamilySampleMiB, 3048.88);
 assert.equal(report.harnessStressUpperBound.classification, 'harness-stress-upper-bound-not-product-single-view-memory');
-assert.ok(report.limitations.includes('numeric-whole-renderer-memory-budget-remains-owner-pending'));
+assert.ok(report.limitations.includes('provisional-release-ceiling-is-not-an-allocation-or-leak-proof'));
 
 const serialized = JSON.stringify(report).toLowerCase();
 for (const disallowed of ['/users/', '/private/', '.trace', ' pid', 'username']) {

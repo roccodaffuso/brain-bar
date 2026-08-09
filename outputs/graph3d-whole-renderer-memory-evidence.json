@@ -36,6 +36,14 @@
     "familyPhysicalFootprintMiB": 788.89,
     "measurementScope": "maximum-sampled-physical-footprint"
   },
+  "releaseReviewBudget": {
+    "classification": "provisional-single-view-maximum-sampled-family-physical-footprint",
+    "referenceHostCeilingMiB": 900,
+    "observedMiB": 788.89,
+    "headroomMiB": 111.11,
+    "passed": true,
+    "scope": "one-focused-visible-webview-on-the-reference-host"
+  },
   "harnessStressUpperBound": {
     "scenarioWebViews": 15,
     "maximumConcurrentFamilySampleBytes": 3196977184,
@@ -47,6 +55,6 @@
     "sampled-physical-footprint-is-not-a-true-peak",
     "not-an-allocation-or-leak-proof",
     "single-focused-webview-and-harness-stress-are-separate-capture-conditions",
-    "numeric-whole-renderer-memory-budget-remains-owner-pending"
+    "provisional-release-ceiling-is-not-an-allocation-or-leak-proof"
   ]
 }

@@ -10,9 +10,11 @@ sampled family physical footprint was 827,215,760 bytes (788.89 MiB), observed
 at 8.704 seconds. The count is the sum of the application/test process,
 WebKit GPU, Networking, WebContent, and supporting media helper samples.
 
-This is a maximum sampled physical footprint, not a true peak, allocation or
-leak proof, or a memory-budget pass. Numeric whole-renderer memory budgets
-remain owner-pending.
+The provisional v0.10 release-review ceiling is 900 MiB for one focused,
+visible WebView on this reference host. The observed 788.89 MiB passes with
+111.11 MiB of headroom. This remains a maximum sampled physical footprint,
+not a true peak, allocation measurement, or leak proof; repeat it on the
+signed distribution build before raising the ceiling.
 
 The separate 15-scenario/WebView capture reached 3,196,977,184 bytes
 (3,048.88 MiB) with 14 concurrent WebContent processes. It is an upper bound

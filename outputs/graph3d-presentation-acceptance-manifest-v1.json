@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "kind": "graph3d-presentation-acceptance-manifest",
-  "state": "evidence-complete-owner-visual-review-pending",
+  "state": "evidence-complete-owner-visual-review-accepted",
   "fixtures": [
     { "name": "1k", "nodeCount": 1000, "edgeCount": 2380 },
     { "name": "inspected-shape", "nodeCount": 12547, "edgeCount": 29868 },
@@ -20,7 +20,7 @@
   "provisionalGates": {
     "overviewPaintedNodeLimit": 7000,
     "overviewPromotionAllowance": "one additional painted node per active promoted identity",
-    "state": "provisional; owner approval required before merge"
+    "state": "accepted for v0.10 release review"
   },
   "requiredRuntimeDiagnostics": [
     "layoutSchemaVersion",
@@ -73,7 +73,7 @@
   },
   "visualAcceptance": {
     "artifacts": "outputs/graph3d-visual-acceptance/manifest.json",
-    "state": "public-synthetic-captures-complete-owner-visual-review-pending",
+    "state": "public-synthetic-captures-complete-owner-visual-review-accepted",
     "before": "outputs/graph3d-presentation-baseline-before-0137a2e.json",
     "beforeStatus": "historical structural-only; no fabricated baseline image"
   },
@@ -82,9 +82,12 @@
     "markdown": "outputs/graph3d-whole-renderer-memory-evidence.md",
     "singleFocusedWebViewMaximumSampledPhysicalFootprintBytes": 827215760,
     "singleFocusedWebViewMaximumSampledPhysicalFootprintMiB": 788.89,
+    "provisionalReleaseReviewCeilingMiB": 900,
+    "provisionalReleaseReviewHeadroomMiB": 111.11,
+    "provisionalReleaseReviewPassed": true,
     "harnessStressUpperBoundBytes": 3196977184,
     "harnessStressUpperBoundMiB": 3048.88,
-    "state": "observed; numeric whole-renderer memory budget owner-pending"
+    "state": "observed; provisional v0.10 single-view release-review ceiling passed"
   },
   "golden": {
     "kind": "count-only",

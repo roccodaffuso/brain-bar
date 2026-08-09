@@ -150,8 +150,10 @@ made.
 reference-host all-process measurement. One focused visible WebView reached a
 maximum sampled family physical footprint of 827,215,760 bytes (788.89 MiB)
 while sequentially loading the public 1k, inspected-shape, and 25k-stress
-fixtures. This is not a true peak, leak/allocation proof, or memory-budget
-pass; numeric whole-renderer memory budget approval remains owner-pending.
+fixtures. The provisional v0.10 release-review ceiling is 900 MiB for one
+focused visible WebView on the reference host, so 788.89 MiB passes with
+111.11 MiB of headroom. This remains sampled evidence, not a true peak or
+leak/allocation proof.
 
 The distinct 15-scenario/WebView capture reached 3,196,977,184 bytes
 (3,048.88 MiB) with 14 concurrent WebContent processes. It is a harness-stress

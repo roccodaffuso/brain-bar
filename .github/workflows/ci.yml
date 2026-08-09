@@ -35,10 +35,22 @@ jobs:
           node --check scripts/test-graph-evidence.mjs
           node --check scripts/renderer-measurement-utils.mjs
           node --check scripts/test-renderer-measurement-utils.mjs
+          node --check scripts/test-graph3d-community-layout.mjs
+          node --check scripts/test-graph3d-presentation.mjs
+          node --check scripts/test-graph3d-presentation-acceptance.mjs
+          node --check scripts/test-graph3d-visual-capture.mjs
+          node --check scripts/test-graph3d-whole-renderer-memory-evidence.mjs
+          node --check scripts/audit-graph3d-accessibility.mjs
           node scripts/test-graph-runtime.mjs
           node scripts/test-large-graph-fixtures.mjs
           node scripts/test-graph-evidence.mjs
           node scripts/test-renderer-measurement-utils.mjs
+          node scripts/test-graph3d-community-layout.mjs
+          node scripts/test-graph3d-presentation.mjs
+          node scripts/test-graph3d-presentation-acceptance.mjs
+          node scripts/test-graph3d-visual-capture.mjs
+          node scripts/test-graph3d-whole-renderer-memory-evidence.mjs
+          node scripts/audit-graph3d-accessibility.mjs
 
       - name: Materialize large graph fixtures
         run: |

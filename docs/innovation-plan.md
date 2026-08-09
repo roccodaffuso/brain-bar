@@ -391,7 +391,7 @@ These ideas should remain behind explicit decision gates until the earlier miles
 
 ### 3D Visual and Spatial Redesign
 
-Evolve the mature 3D renderer from a dense uniform cloud into a deterministic community-island system with progressive painted detail, stronger node/edge hierarchy, bounded labels, intentional camera presets, and a collapsible context panel. The complete implementation contract, performance boundary, test matrix, and phased rollout are defined in [`graph3d-visual-spatial-redesign.md`](graph3d-visual-spatial-redesign.md). This work is explicitly post-0.10 and must preserve the completed M0–M5 identity, loading, privacy, read-only, and performance contracts.
+Evolve the mature 3D renderer from a dense uniform cloud into a deterministic community-island system with progressive painted detail, stronger node/edge hierarchy, bounded labels, intentional camera presets, and a collapsible context panel. The complete implementation contract, performance boundary, test matrix, and phased rollout are defined in [`graph3d-visual-spatial-redesign.md`](graph3d-visual-spatial-redesign.md). The work was developed separately from the original v0.10 release candidate, then accepted for inclusion in the first public v0.10 release because that version had not yet shipped. It preserves the completed M0–M5 identity, loading, privacy, read-only, and performance contracts.
 
 ### Temporal Replay
 
