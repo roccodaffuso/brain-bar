@@ -1,263 +1,264 @@
 # BrainBar
 
-> A local-first macOS app for exploring Graphify-powered Markdown graphs.
+> Explore large Markdown knowledge graphs on macOS without sending your vault anywhere.
 
-[![Latest release](https://img.shields.io/github/v/release/Nova1390/brain-bar?style=flat-square)](https://github.com/Nova1390/brain-bar/releases/latest)
+[![Latest release](https://img.shields.io/github/v/release/roccodaffuso/brain-bar?style=flat-square)](https://github.com/roccodaffuso/brain-bar/releases/latest)
 [![macOS 14+](https://img.shields.io/badge/macOS-14%2B-111827?style=flat-square&logo=apple)](https://www.apple.com/macos/)
-[![SwiftUI](https://img.shields.io/badge/SwiftUI-native-F05138?style=flat-square&logo=swift&logoColor=white)](https://developer.apple.com/xcode/swiftui/)
-[![Graphify](https://img.shields.io/badge/Graphify-compatible-6D7DFF?style=flat-square)](https://github.com/safishamsi/graphify)
+[![Developer ID notarized](https://img.shields.io/badge/macOS-notarized-2563EB?style=flat-square&logo=apple)](https://github.com/roccodaffuso/brain-bar/releases/latest)
+[![Graphify compatible](https://img.shields.io/badge/Graphify-compatible-6D7DFF?style=flat-square)](https://github.com/safishamsi/graphify)
 [![License: MIT](https://img.shields.io/badge/license-MIT-0f172a?style=flat-square)](LICENSE)
 
-BrainBar turns local Graphify output into a native macOS workspace for navigating a second brain or any Graphify-compatible Markdown knowledge graph. Search a note, reveal it in 3D, focus its neighborhood, trace why two ideas connect, and watch local agent activity appear on the graph.
+BrainBar turns local [Graphify](https://github.com/safishamsi/graphify) output into a native macOS workspace for exploring a second brain, documentation vault, or any Graphify-compatible Markdown graph.
 
-BrainBar is not a raw Markdown graph generator. It expects Graphify to generate `graphify-out/graph.json` first, then makes that graph useful as an interactive operating surface.
+Search for a note. Orbit its neighborhood in 3D. Trace why two ideas connect. Review what changed. See metadata-only agent activity appear on the graph. Your Markdown remains canonical and local.
 
-![BrainBar 3D Explorer](docs/brainbar-3d-entrypoints.png)
+**[Download the latest notarized DMG](https://github.com/roccodaffuso/brain-bar/releases/latest)** · [What changed in v0.10.0](CHANGELOG.md#0100---2026-08-09) · [Configuration](docs/configuration.md)
 
-## What BrainBar Does
+![BrainBar 3D Explorer showing a large public-safe graph fixture](outputs/graph3d-visual-acceptance/inspected-overview-docked.png)
 
-BrainBar reads existing Graphify output from a configured local vault or content folder:
+*Public-safe synthetic fixture: 12,547 nodes and 29,868 edges in the perspective 3D Explorer.*
+
+## Why BrainBar
+
+Large Markdown graphs are useful, but they become difficult to read once thousands of notes and relationships share one canvas. BrainBar adds the interaction layer that generated graph files do not provide on their own:
+
+- **Stay oriented.** Perspective community islands, progressive detail, semantic camera views, and saved graph contexts keep large graphs navigable.
+- **Follow relationships.** Search Reveal, Source Lens, shortest paths, path explanations, and edge provenance expose how notes connect.
+- **Resume where the graph changed.** Recent Orbit, Graph Story, Change Radar, Agent Activity, and explicit workflow trails turn the graph into a working surface.
+- **Inspect without mutating.** Graph Check and evidence inspectors explain maintenance opportunities but never rewrite Markdown.
+
+BrainBar does not generate the graph itself. Graphify remains the derived-graph layer; Markdown remains the source of truth.
 
 ```text
-graphify-out/
-|-- graph.html
-|-- graph.json
-`-- GRAPH_REPORT.md
+Markdown vault
+    │
+    └── Graphify ──> graphify-out/graph.json
+                         │
+                         ├── BrainBar 3D Explorer
+                         └── BrainBar 2D Workbench  (when graph.html exists)
 ```
 
-It does not vendor Graphify, upload vault content, rewrite generated Graphify files, or write to the vault from graph exploration features. The 3D and 2D graph modes are runtime-only views over local data.
+## Quick Start
 
-## What Is In v0.10.0
+### Requirements
 
-- **Large-graph foundation.** Off-main validation and transport, a dedicated layout Worker, deterministic layout caching, explicit loading/cancel/retry states, and exact graph identity gates.
-- **2D Workbench offline.** Graphify `graph.html` now uses BrainBar's pinned local Vis Network 9.1.6 runtime; the matching remote dependency is blocked. JSON-only vaults continue to use the bundled 3D Focus renderer.
-- **Orientation and continuity.** Setup Doctor, complete-graph filtered search, saved local views, and versioned 2D/3D session handoff.
-- **Change Radar.** Local rolling snapshots and a deterministic Change Inbox explain what changed after a successful refresh.
-- **Agent Activity and Workflows.** Event-driven watching, incremental metadata-only history, privacy controls, explicit-ID workflow trails, and pending-refresh paths.
-- **Guided Maintenance.** Unified evidence inspectors and copy-only Graph Check proposals for deterministic, reviewable maintenance without Markdown mutation.
-- **Spatial 3D Explorer.** Perspective community islands, progressive detail, crisp Retina nodes, bounded labels, semantic camera views, and direct orbit/pan/zoom navigation make large graphs readable without dropping queryable identities.
-- **Notarized releases.** Public GitHub Releases ship as Developer ID signed, Apple-notarized `BrainBar.dmg` files.
+- macOS 14 or newer
+- a local Markdown vault or content directory
+- Graphify output containing `graphify-out/graph.json`
 
-See [CHANGELOG.md](CHANGELOG.md) for the full release history.
+### 1. Generate the graph
 
-## Install
+Install [Graphify](https://github.com/safishamsi/graphify), then run it from your vault:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/Nova1390/brain-bar/main/install.sh | bash
+cd /path/to/your/vault
+graphify update .
 ```
 
-The installer downloads the latest GitHub Release DMG, installs `BrainBar.app` into `~/Applications`, and preserves existing local config.
+### 2. Install BrainBar
 
-To prefill the vault path on first install:
+Download `BrainBar.dmg` from the [latest release](https://github.com/roccodaffuso/brain-bar/releases/latest), or use the installer:
 
 ```sh
-BRAIN_BAR_VAULT_PATH="/path/to/your/vault" curl -fsSL https://raw.githubusercontent.com/Nova1390/brain-bar/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/roccodaffuso/brain-bar/main/install.sh | bash
 ```
 
-To replace an existing install non-interactively:
+To prefill the vault path:
 
 ```sh
-BRAIN_BAR_FORCE=1 curl -fsSL https://raw.githubusercontent.com/Nova1390/brain-bar/main/install.sh | bash
+BRAIN_BAR_VAULT_PATH="/path/to/your/vault" \
+  curl -fsSL https://raw.githubusercontent.com/roccodaffuso/brain-bar/main/install.sh | bash
 ```
 
-## First Run
+### 3. Open the graph
 
-1. Install or update [Graphify](https://github.com/safishamsi/graphify).
-2. Generate Graphify output for your local Markdown vault.
-3. Confirm `graphify-out/graph.json` exists inside the configured vault.
-4. Open BrainBar and set the vault path in Settings, or pass `BRAIN_BAR_VAULT_PATH` during install.
-5. Use Refresh Graph if the graph output is stale.
-6. Open the graph window and start in 3D.
+1. Open BrainBar from `~/Applications`.
+2. Choose the vault in Settings.
+3. Refresh status.
+4. Open the Focus Window and start in 3D.
 
-## The Core Loop
+BrainBar preserves the existing local configuration when updated.
 
-1. **Reveal.** Search for a note and jump to it without collapsing the graph.
-2. **Focus.** Use Focus Orbit and depth controls to read its visible neighborhood.
-3. **Trace.** Start a path from one note, click another note or search result, and BrainBar highlights the shortest visible route.
-4. **Understand.** Read `Why this path`, compare route variants, or switch Source Lens between All, Graphify, and Wikilinks.
-5. **Re-enter.** Use Recent Orbit or Graph Story to resume from recent changes and orient yourself in the current graph.
+## Explore the Graph
 
-![BrainBar shortest path](docs/brainbar-path-demo.gif)
+### 3D Explorer
 
-## Agent Activity
+The 3D Explorer is the main large-graph surface. It uses deterministic community-island coordinates, a perspective camera, and adaptive painted detail while keeping every valid graph identity searchable and queryable.
 
-Agent Activity shows what local tools and agents are touching in your graph. BrainBar watches recent local file activity and can also read metadata-only JSONL events from the bundled `brainbar-trace` helper.
+- orbit, pan, dolly, Fit, Top View, and Reset Tilt
+- Overview, Balanced, and Full painted detail
+- Search Reveal and node-focused camera views
+- Focus depth from immediate neighbors to wider context
+- Community Spotlight and source-aware filtering
+- shortest path, alternative paths, and deterministic explanations
+- Recent Orbit and guided Graph Story
+- Collapsed, Overlay, and Docked context panels
+- reduced-motion and keyboard-accessible controls
 
-The v0.10.0 integration includes one-click installers for Codex and Claude. When enabled, supported agents can emit events such as `read`, `write`, `create`, `delete`, `focus`, `closeout`, and `decision`. BrainBar maps those paths back to graph nodes when possible and shows pending paths when the graph has not been refreshed yet.
+![BrainBar node focus and evidence inspector](outputs/graph3d-visual-acceptance/1k-selected-hub.png)
 
-![BrainBar Agent Activity](docs/brainbar-agent-activity.png)
+*Selecting a node keeps its surrounding community visible while exposing source, relationship, and graph-health evidence.*
 
-The event contract is deliberately narrow:
+### 2D Workbench
 
-- metadata only: agent, action, path, timestamp, optional reason/status
-- no note contents, prompts, raw transcripts, stdout/stderr, secrets, or build artifacts
-- local log only, stored under `~/Library/Application Support/BrainBar/`
-- automatic retention keeps the log bounded
-
-![BrainBar Agent Activity sidebar detail](docs/brainbar-agent-activity-sidebar.png)
-
-See [Agent Workflows](docs/agent-workflows.md) for the product direction beyond event-level activity. Hermes Agent is documented there as a future integration direction: first as a metadata-only activity source like Codex and Claude, later as a workflow projection only when stable run/session metadata exists. The document also keeps Hermes `SOUL.md`, internal memory, vault skills, and BrainBar graph truth deliberately separate.
-
-## 3D Explorer
-
-The 3D Explorer is BrainBar's main surface. It keeps the graph spatially present while making one route, node, community, or recent change readable.
-
-- **Search Reveal** jumps to visible matching notes and highlights local neighbors.
-- **Focus Orbit** centers a selected note and expands visible context by depth.
-- **Shortest Path** traces the shortest visible unweighted route between two notes.
-- **Explain Path** summarizes visible graph metadata behind a route without AI calls.
-- **Path Compare** shows alternative deterministic route variants when they exist.
-- **Community Spotlight** inspects one visible community without losing global context.
-- **Recent Orbit** highlights recently changed notes and traces one active recent note to a nearby key note.
-- **Graph Story** gives a guided deterministic tour through recent changes, key notes, communities, bridge notes, and needs-attention areas.
-
-![BrainBar Recent Orbit](docs/brainbar-recent-orbit.png)
-
-![BrainBar Graph Story](docs/brainbar-graph-story.png)
-
-## 2D Workbench
-
-2D is the operational workbench for inspection and graph hygiene. It embeds the generated Graphify/vis-network graph and adds BrainBar runtime controls without rewriting `graphify-out/graph.html`.
-
-BrainBar bundles the pinned Vis Network 9.1.6 browser runtime, blocks Graphify's matching `unpkg.com` script request, and supplies the local copy before Graphify initializes the graph. This makes the 2D Workbench independent of network availability, but it still requires Graphify to generate `graphify-out/graph.html`. A vault with only `graph.json` opens through the bundled 3D Focus renderer.
+The 2D Workbench is the dense operational view for graph hygiene, provenance inspection, and workflow lenses. BrainBar supplies a pinned local Vis Network 9.1.6 runtime, so viewing a generated `graph.html` does not depend on a remote CDN.
 
 Use it for:
 
-- recent notes, key notes, needs-links notes, groups, and Graph Check
-- Source Lens inspection across All, Graphify, and Wikilinks
-- edge provenance and source/target inspection
-- community detail and bridge notes
-- bridge actions such as Reveal in 3D and Path from here in 3D
+- Recent, Key Notes, Needs Links, Groups, Review, and Graph Check views
+- All, Graphify, and Wikilinks source lenses
+- edge direction, relationship, provenance, and source-path inspection
+- Reveal in 3D and Path from here in 3D
 
-## Source Lens
+| Graphify output | 3D Explorer | 2D Workbench |
+| --- | --- | --- |
+| `graph.json` | Yes | No |
+| `graph.json` + `graph.html` | Yes | Yes |
 
-Source Lens filters edge provenance in the current graph view:
+If a large graph exceeds Graphify's HTML visualization limit, BrainBar still opens the JSON-only graph in 3D.
 
-- `All`: show all visible graph relationships
-- `Graphify`: show generated Graphify relationships
-- `Wikilinks`: show wikilinks exported by Graphify metadata
+## Understand What Changed
 
-The internal compatibility raw value for Wikilinks is still `obsidian`; the public label is `Wikilinks`.
+BrainBar adds local context around the graph without turning derived observations into canonical truth.
 
-## Local Workflow Hooks
+### Change Radar
 
-BrainBar can run configured local commands, but it does not define or own those workflows:
+After a successful refresh, Change Radar compares bounded local snapshots and surfaces added, removed, changed, and newly attention-worthy graph entities in a compact Change Inbox.
 
-- Refresh Graphify output.
-- Open Graphify report files.
-- Show System Status for vault path, graph file, Graphify command, Git state, Review Queue, and Brain Check.
-- Run an optional Brain Check command.
-- Show an optional Review Queue status command and run an explicit manual action.
+### Agent Activity
 
-Review Queue is generic and local. The background watcher is off by default and only checks status.
+Agent Activity watches local filesystem metadata and can consume events from the bundled `brainbar-trace` helper. Optional one-click integrations are available for Codex and Claude.
+
+Events can describe `read`, `write`, `create`, `delete`, `focus`, `closeout`, and `decision` actions. BrainBar maps safe relative paths back to graph nodes when possible and keeps unresolved paths pending until Graphify refreshes the graph.
+
+![BrainBar Agent Activity](docs/brainbar-agent-activity.png)
+
+### Workflows
+
+Workflow history groups activity only when an explicit workflow or session identifier exists. Source, output, touched-note trails, graph highlights, retention, and Clear behavior remain local and inspectable.
+
+### Guided Maintenance
+
+Node and edge inspectors share one deterministic evidence engine across 2D and 3D. Graph Check can surface orphans, isolated components, stale hubs, weak bridges, and related caveats as copy-only proposals. It exposes no graph-to-Markdown mutation action.
+
+## Local-First Boundary
+
+| BrainBar does | BrainBar does not |
+| --- | --- |
+| Read local Graphify output | Upload vault contents |
+| Open local source notes through macOS | Call remote AI services |
+| Store config, caches, views, Radar, and activity history in Application Support | Store prompts, raw transcripts, stdout, stderr, or note bodies in Agent Activity |
+| Run commands you explicitly configure | Rewrite Markdown from graph exploration |
+| Run Graphify when you explicitly request a refresh | Modify generated Graphify files merely by viewing the graph |
+
+Default local state lives under:
+
+```text
+~/Library/Application Support/BrainBar/
+```
+
+Agent Activity retention is bounded and configurable. Change Radar and workflow history are vault-scoped. See [Agent Workflows](docs/agent-workflows.md) for the full metadata and privacy boundary.
+
+## What Ships in v0.10.0
+
+- perspective 3D community islands with adaptive detail and Retina node rendering
+- off-main graph validation, Worker layout, cancellation, retry, and deterministic layout caching
+- offline 2D runtime for Graphify-generated `graph.html`
+- Setup Doctor, global filtered search, saved views, and versioned 2D/3D continuity
+- Change Radar and a deterministic Change Inbox
+- privacy-bounded Agent Activity and explicit-ID workflow trails
+- shared 2D/3D evidence inspectors and read-only Guided Maintenance
+- Developer ID signed and Apple-notarized GitHub releases
+
+The full technical history is in [CHANGELOG.md](CHANGELOG.md).
 
 ## Configuration
 
-Default config path:
+The default configuration file is:
 
 ```text
 ~/Library/Application Support/BrainBar/config.json
 ```
 
-Installer variables:
+Installer options:
 
-- `BRAIN_BAR_VAULT_PATH`: prefill the configured local vault path.
-- `BRAIN_BAR_FORCE=1`: replace an existing install non-interactively.
-- `BRAIN_BAR_INSTALL_DIR`: override the install directory, defaulting to `~/Applications`.
+- `BRAIN_BAR_VAULT_PATH`: prefill the configured vault path
+- `BRAIN_BAR_FORCE=1`: replace an existing installation without prompting
+- `BRAIN_BAR_INSTALL_DIR`: change the install directory from `~/Applications`
 
-Development and tests can override the config path:
+BrainBar can run configured local commands for Graphify refresh, Brain Check, Review Queue status, and explicit manual actions. It does not own those workflows and never runs a mutating Review Queue action automatically.
+
+See [docs/configuration.md](docs/configuration.md) for the complete config shape.
+
+## Update or Uninstall
+
+Update by running the installer again:
 
 ```sh
-BRAIN_BAR_CONFIG=/tmp/brainbar-config.json open ~/Applications/BrainBar.app
+BRAIN_BAR_FORCE=1 \
+  curl -fsSL https://raw.githubusercontent.com/roccodaffuso/brain-bar/main/install.sh | bash
 ```
 
-See [Configuration](docs/configuration.md) for the full config shape and command behavior.
-
-## Requirements
-
-For users:
-
-- macOS 14 or newer
-- Graphify output in the configured vault
-- `graphify` available on `PATH` for the default refresh command, or a custom refresh command in config
-- `git` on `PATH` if you want vault Git status
-
-For development:
-
-- Xcode 26 or newer
-- Node.js for graph runtime smoke tests
-
-## Development
+Uninstall the app while keeping local configuration:
 
 ```sh
-xcodebuild -project BrainBar.xcodeproj -scheme BrainBar -destination 'platform=macOS' build
-xcodebuild test -project BrainBar.xcodeproj -scheme BrainBar -destination 'platform=macOS' CODE_SIGNING_ALLOWED=NO
-node scripts/test-graph-runtime.mjs
-scripts/check-public-safety.sh
+curl -fsSL https://raw.githubusercontent.com/roccodaffuso/brain-bar/main/uninstall.sh | bash
 ```
 
-Before changing product vocabulary or graph architecture terms, read [CONCEPTS.md](CONCEPTS.md).
-
-## Release
-
-Maintainer release tags publish a notarized `BrainBar.dmg` through GitHub Actions:
+Remove the local configuration too:
 
 ```sh
-git tag -a vX.Y.Z -m "BrainBar vX.Y.Z"
-git push origin vX.Y.Z
-```
-
-The release workflow runs public safety checks, graph runtime checks, Xcode tests, Developer ID signing, Apple notarization, stapling, DMG creation, and mounted-app validation before uploading the asset. Required and optional signing secrets are documented in [RELEASING.md](RELEASING.md).
-
-After publication, maintainers can run the clean-runner verification workflow:
-
-```sh
-gh workflow run verify-release-dmg.yml --ref main -f tag=vX.Y.Z
-```
-
-## Update
-
-Run the installer again. Existing config is preserved.
-
-```sh
-BRAIN_BAR_FORCE=1 curl -fsSL https://raw.githubusercontent.com/Nova1390/brain-bar/main/install.sh | bash
-```
-
-## Uninstall
-
-```sh
-curl -fsSL https://raw.githubusercontent.com/Nova1390/brain-bar/main/uninstall.sh | bash
-```
-
-To remove local config too:
-
-```sh
-BRAIN_BAR_REMOVE_CONFIG=1 curl -fsSL https://raw.githubusercontent.com/Nova1390/brain-bar/main/uninstall.sh | bash
+BRAIN_BAR_REMOVE_CONFIG=1 \
+  curl -fsSL https://raw.githubusercontent.com/roccodaffuso/brain-bar/main/uninstall.sh | bash
 ```
 
 ## Troubleshooting
 
-- **The graph is empty.** Check that `vaultPath` points at the intended vault and that `graphify-out/graph.json` exists there.
-- **The menu-bar view asks to open 3D.** The 2D Workbench requires `graphify-out/graph.html`; regenerate the HTML with a node limit above your graph size, then refresh BrainBar. JSON-only output remains available in the 3D Focus window.
-- **Refresh Graph fails.** Make sure `graphify` is available on `PATH`, or update the configured refresh command.
-- **Search finds nothing.** Search Reveal only searches nodes visible under the current Source Lens and community filters.
-- **No path found.** The selected nodes may be disconnected in the visible graph, or the active Source Lens/community filters may hide the route.
-- **Recent Orbit is empty.** BrainBar needs file modification metadata or date-like labels/paths to identify recent notes.
-- **Agent Activity shows pending paths.** Refresh Graph after creating new files so Graphify can add them to `graph.json`.
-- **Codex or Claude events do not appear.** Enable Agent Activity in Settings, install the integration, and confirm the agent is using `brainbar-trace`.
-- **macOS blocks the app.** Install the latest notarized DMG release instead of an older non-notarized build.
+- **The graph is empty:** confirm the configured vault and `graphify-out/graph.json`, then refresh status.
+- **Only 3D is available:** 2D additionally requires `graphify-out/graph.html`; JSON-only graphs are fully supported in 3D.
+- **Refresh fails:** make sure `graphify` is on `PATH`, or configure its absolute executable path.
+- **A new file appears as pending activity:** refresh Graphify so the path can resolve to a graph node.
+- **Search or paths omit expected nodes:** check the active Source Lens and community filters.
+- **macOS blocks an old build:** replace it with the latest notarized DMG.
 
-## Privacy
+## Development
 
-BrainBar is local-first:
+Requirements: Xcode 16 or newer and Node.js.
 
-- It reads local graph output and configured local source files.
-- It opens local notes through macOS.
-- It runs local commands that you configure.
-- It does not upload vault content.
-- It does not write to the vault from graph exploration features.
-- It does not call remote AI services.
-- Agent Activity stores metadata-only local events and never note contents.
+```sh
+xcodebuild -project BrainBar.xcodeproj \
+  -scheme BrainBar \
+  -destination 'platform=macOS' \
+  build
+
+xcodebuild test \
+  -project BrainBar.xcodeproj \
+  -scheme BrainBar \
+  -destination 'platform=macOS'
+
+node scripts/test-graph-runtime.mjs
+bash scripts/check-public-safety.sh
+```
+
+The CI workflow also runs deterministic large-graph, evidence, layout, presentation, visual-acceptance, accessibility, and memory-evidence checks. See [Performance Testing](docs/performance-testing.md) for the reference fixtures and measurement boundary.
+
+Before changing product vocabulary or architecture terms, read [CONCEPTS.md](CONCEPTS.md).
+
+## Release Process
+
+Maintainer tags run public-safety checks, JavaScript gates, the full XCTest suite, Developer ID signing, Apple notarization, stapling, DMG creation, and mounted-app validation before publication.
+
+See [RELEASING.md](RELEASING.md) for the release contract and post-release verification workflow.
+
+## Documentation
+
+- [Concepts and product vocabulary](CONCEPTS.md)
+- [Configuration](docs/configuration.md)
+- [Agent Workflows](docs/agent-workflows.md)
+- [3D visual and spatial redesign](docs/graph3d-visual-spatial-redesign.md)
+- [3D presentation acceptance](docs/graph3d-presentation-acceptance.md)
+- [Accessibility audit](docs/graph3d-accessibility-audit.md)
+- [Performance testing](docs/performance-testing.md)
 
 ## License
 
